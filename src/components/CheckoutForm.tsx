@@ -42,7 +42,7 @@ function Section({ n, title, children }: { n: number; title: string; children: R
   );
 }
 
-export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: { zones: Zone[]; currency: Currency; emailEnabled: boolean; paymentMethods: { id: string; label: string }[] }) {
+export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: { zones: Zone[]; currency: Currency; emailEnabled: boolean; paymentMethods: { id: string; label: string; instructions: string | null }[] }) {
   const router = useRouter();
   const { items, ready, clear } = useCart();
   const { data, loading } = useServerCart(items, ready);
@@ -55,6 +55,8 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
   const keyRef = useRef("");
   const formRef = useRef<HTMLFormElement>(null);
   const [gpsMsg, setGpsMsg] = useState("");
+  const [methodId, setMethodId] = useState(paymentMethods.length === 1 ? paymentMethods[0].id : "");
+  const method = paymentMethods.find((m) => m.id === methodId);
 
   useEffect(() => {
     try {
@@ -197,13 +199,14 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
         </fieldset>
 
         <Section n={3} title="Moyen de paiement souhaité">
-          <p className="rounded-xl bg-cream-2 p-3 text-sm"><strong>Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza.</strong> Ne communiquez jamais de numéro de carte, de code PIN, de mot de passe ou de code de validation.</p>
+          <p className="rounded-xl bg-cream-2 p-3 text-sm"><strong>Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande.</strong> Ne communiquez jamais de numéro de carte, de code PIN, de mot de passe ou de code de validation.</p>
           <Field id="f-paymentMethodId" label="Moyen de paiement souhaité" error={errors.paymentMethodId}>
-            <select id="f-paymentMethodId" name="paymentMethodId" className="field" defaultValue={paymentMethods.length === 1 ? paymentMethods[0].id : ""} aria-invalid={errors.paymentMethodId ? true : undefined}>
+            <select id="f-paymentMethodId" name="paymentMethodId" className="field" value={methodId} onChange={(e) => setMethodId(e.target.value)} aria-invalid={errors.paymentMethodId ? true : undefined}>
               {paymentMethods.length !== 1 && <option value="" disabled>Choisir…</option>}
               {paymentMethods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </Field>
+          {method?.instructions && <p className="rounded-xl border border-line p-3 text-sm"><strong>{method.label} : </strong>{method.instructions}</p>}
           <Field id="f-paymentMethodNote" label="Précisez le moyen dont vous disposez" optional error={errors.paymentMethodNote} hint="Ex. : espèces à la livraison, ou le service mobile que vous utilisez.">
             <input id="f-paymentMethodNote" name="paymentMethodNote" maxLength={200} className="field" />
           </Field>

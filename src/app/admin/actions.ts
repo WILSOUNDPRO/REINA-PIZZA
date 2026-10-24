@@ -7,6 +7,7 @@ import { requireAdmin, passwordLogin, setSessionCookies, clearSession } from "@/
 import { uploadMenuImage } from "@/server/admin/storage";
 import { setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
 import { deleteProduct } from "@/server/menu";
+import { deleteMethod, saveMethod } from "@/server/paymentMethods";
 import { allow, clientKey } from "@/server/ratelimit";
 import { bool, int, money, str } from "@/server/admin/money-input";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/labels";
@@ -223,42 +224,27 @@ export async function deleteZoneAction(formData: FormData) {
   back("/admin/zones", "Zone supprimée.");
 }
 
-// ───────────── Moyens de paiement proposés aux clients ─────────────
+// ───────────── Moyens de paiement (le paiement reste organisé hors site) ─────────────
 export async function saveMethodAction(formData: FormData) {
   await requireAdmin();
-  const sql = getSql();
   const id = str(formData, "id");
-  const label = str(formData, "label");
-  const path = "/admin/reglages";
-  if (!label || label.length > 80) back(path, "Libellé invalide (80 caractères max).", false);
-  const enabled = isUuid(id) ? bool(formData, "enabled") : true;
-  try {
-    if (isUuid(id)) {
-      if (!enabled) {
-        const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from payment_methods where enabled and id <> ${id}`;
-        if (n === 0) back(path, "Au moins un moyen de paiement doit rester activé.", false);
-      }
-      await sql`update payment_methods set label = ${label}, enabled = ${enabled}, position = ${int(formData, "position")} where id = ${id}`;
-    } else {
-      await sql`insert into payment_methods (label, position) values (${label}, ${int(formData, "position", 10)})`;
-    }
-  } catch (e) {
-    if ((e as { code?: string }).code === "23505") back(path, "Ce moyen de paiement existe déjà.", false);
-    throw e;
-  }
-  back(path, "Moyen de paiement enregistré.");
+  const r = await saveMethod(getSql(), {
+    id: isUuid(id) ? id : undefined,
+    label: str(formData, "label"),
+    instructions: String(formData.get("instructions") ?? ""),
+    recipientAccount: str(formData, "recipientAccount"),
+    recipientName: str(formData, "recipientName"),
+    position: int(formData, "position", 10),
+    enabled: isUuid(id) ? bool(formData, "enabled") : true,
+  });
+  back("/admin/moyens-paiement", r.ok ? "Moyen de paiement enregistré." : r.message, r.ok);
 }
 
 export async function deleteMethodAction(formData: FormData) {
   await requireAdmin();
-  const sql = getSql();
   const id = str(formData, "id");
-  if (isUuid(id)) {
-    const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from payment_methods where enabled and id <> ${id}`;
-    if (n === 0) back("/admin/reglages", "Au moins un moyen de paiement doit rester activé.", false);
-    await sql`delete from payment_methods where id = ${id}`; // les commandes gardent le libellé choisi
-  }
-  back("/admin/reglages", "Moyen de paiement supprimé.");
+  const r = isUuid(id) ? await deleteMethod(getSql(), id) : ({ ok: false, message: "Requête invalide." } as const);
+  back("/admin/moyens-paiement", r.ok ? "Moyen de paiement supprimé. Les commandes gardent leur choix." : r.message, r.ok);
 }
 
 // ───────────── Réglages ─────────────

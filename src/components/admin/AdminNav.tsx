@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LayoutDashboard, MapPinned, Pizza, Settings } from "lucide-react";
+import { ClipboardList, LayoutDashboard, MapPinned, Pizza, Settings, Wallet } from "lucide-react";
 
 const links = [
   { href: "/admin", label: "Vue d'ensemble", Icon: LayoutDashboard, exact: true },
   { href: "/admin/commandes", label: "Commandes", Icon: ClipboardList, badge: true },
   { href: "/admin/menu", label: "Menu", Icon: Pizza, also: ["/admin/supplements"] },
   { href: "/admin/zones", label: "Livraison", Icon: MapPinned },
+  { href: "/admin/moyens-paiement", label: "Moyens de paiement", Icon: Wallet },
   { href: "/admin/reglages", label: "Réglages", Icon: Settings },
 ];
 

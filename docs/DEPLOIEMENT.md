@@ -10,6 +10,9 @@ Aucune étape ne doit exposer de secret : les clés se saisissent dans les varia
    ```
 3. Authentication → Sign In / Providers : désactiver « Allow new users to sign up ».
 
+### Projet déjà installé : appliquer seulement les nouvelles migrations
+`setup.sql` ne sert qu'à une base vide. Sur une base déjà installée, exécutez uniquement la ou les migrations ajoutées depuis (fichiers de `supabase/migrations`, dans l'ordre). Elles sont idempotentes. Dernière en date : `20260105000000_payment_methods_details.sql` (active MonCash et ajoute les champs instructions / compte destinataire / bénéficiaire). Le site continue de fonctionner avant son application, mais MonCash n'apparaît qu'après.
+
 ## 2. Variables d'environnement (Vercel → Settings → Environment Variables)
 | Variable | Valeur |
 |---|---|

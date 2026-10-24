@@ -46,6 +46,12 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
   const waUrl = waLink(settings.whatsapp_number, message);
   const phone = normalizePhone(settings.phone) ?? `+${settings.whatsapp_number}`;
   const cancelled = o.order_status === "cancelled";
+  // Instructions de paiement actuelles du moyen choisi (retrouvé par son nom enregistré) : affichées seulement après confirmation de la commande.
+  const [cur] = o.payment_method
+    ? await sql<{ instructions: string | null; recipient_account: string | null; recipient_name: string | null }[]>`select * from payment_methods where label = ${o.payment_method} and enabled`
+    : [];
+  const hasPayInfo = !!(cur && (cur.instructions || cur.recipient_account || cur.recipient_name));
+  const showPayInfo = hasPayInfo && o.order_status !== "to_confirm" && !cancelled;
   const confirmedPay = o.payment_status === "confirmed_manually" || o.payment_status === "paid";
 
   return (
@@ -109,8 +115,18 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
       <section className="card space-y-2 p-4" aria-labelledby="paiement">
         <h2 id="paiement" className="flex items-center gap-2 text-lg font-extrabold"><CreditCard size={20} className="text-tomato" aria-hidden="true" />Paiement</h2>
         <p className="text-sm"><span className="text-ink-soft">Moyen souhaité : </span><strong>{o.payment_method ?? "—"}</strong>{o.payment_method_note ? ` — ${o.payment_method_note}` : ""}</p>
-        <p className="text-sm font-semibold">Paiement à organiser directement avec la pizzeria.</p>
+        <p className="text-sm font-semibold">Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande.</p>
         <p className="text-sm"><span className="text-ink-soft">Statut : </span><strong>{PAYMENT_STATUS_LABELS[o.payment_status]}</strong>{confirmedPay && o.paid_at ? ` (le ${formatDateTime(o.paid_at)})` : ""}</p>
+        {showPayInfo && cur && (
+          <div className="space-y-1 rounded-xl border border-line bg-cream p-3 text-sm">
+            <p className="font-bold">Instructions de paiement — {o.payment_method}</p>
+            {cur.instructions && <p>{cur.instructions}</p>}
+            {cur.recipient_account && <p><span className="text-ink-soft">Numéro ou compte destinataire : </span><strong className="select-all">{cur.recipient_account}</strong></p>}
+            {cur.recipient_name && <p><span className="text-ink-soft">Bénéficiaire : </span><strong>{cur.recipient_name}</strong></p>}
+            <p className="text-xs text-ink-soft">Conservez la référence {o.ref} et confirmez votre paiement avec Reina Pizza sur WhatsApp.</p>
+          </div>
+        )}
+        {hasPayInfo && !showPayInfo && !cancelled && <p className="text-xs text-ink-soft">Les instructions de paiement s'afficheront ici après confirmation de la commande par Reina Pizza.</p>}
         <p className="text-xs text-ink-soft">Aucun paiement n'est effectué sur le site. Seule Reina Pizza peut confirmer qu'un paiement a été reçu.</p>
       </section>
 
