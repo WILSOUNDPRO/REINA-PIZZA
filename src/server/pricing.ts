@@ -35,8 +35,8 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
   const productIds = [...new Set([...merged.values()].map((i) => i.productId))];
   const extraIds = [...new Set([...merged.values()].flatMap((i) => i.extraIds))];
 
-  const products = await sql<{ id: string; name: string; description: string; image_url: string | null; default_image: string | null; is_demo: boolean; available: boolean; cat_active: boolean | null }[]>`
-    select p.id, p.name, p.description, p.image_url, p.default_image, p.is_demo, p.available, c.active as cat_active
+  const products = await sql<{ id: string; name: string; description: string; image_url: string | null; default_image: string | null; is_demo: boolean; available: boolean; archived_at: Date | null; cat_active: boolean | null }[]>`
+    select p.id, p.name, p.description, p.image_url, p.default_image, p.is_demo, p.available, p.archived_at, c.active as cat_active
     from products p left join categories c on c.id = p.category_id where p.id in ${sql(productIds)}`;
   const sizes = await sql<{ product_id: string; size: Size; price_minor: number; available: boolean }[]>`
     select product_id, size, price_minor, available from product_sizes where product_id in ${sql(productIds)}`;
@@ -50,11 +50,11 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
   for (const [key, it] of merged) {
     const p = products.find((x) => x.id === it.productId);
     const s = sizes.find((x) => x.product_id === it.productId && x.size === it.size);
-    if (!p || !p.available || p.cat_active === false) {
+    if (!p || !p.available || p.archived_at || p.cat_active === false) {
       problems.push({ key, productId: it.productId, size: it.size, reason: "unavailable" });
       continue;
     }
-    if (!s || !s.available) {
+    if (!s || !s.available || s.price_minor <= 0) { // une taille sans prix n'est ni gratuite ni commandable
       problems.push({ key, productId: it.productId, size: it.size, reason: "size_unavailable" });
       continue;
     }

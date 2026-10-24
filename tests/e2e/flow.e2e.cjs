@@ -37,6 +37,10 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
 (async () => {
   psql("update settings set orders_paused = false, currency = 'HTG'");
   psql("delete from delivery_zones where name = 'Zone test e2e'");
+  // État de départ du catalogue réel (reprise après un test interrompu) : seules les tailles S sont tarifées.
+  psql("delete from products where name = 'Test photo e2e'");
+  psql("delete from product_sizes where size <> 'S' and product_id in (select id from products where name like 'Pizza %')");
+  psql("update products set available = true, archived_at = null, image_url = null where name like 'Pizza %'");
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
@@ -115,23 +119,23 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("double clic : une seule commande créée", Number(psql("select count(*) from orders")) === before + 1);
   const body = norm(await page.locator("main").innerText());
   const ref = body.match(/RP-[A-Z0-9]{6}/)[0];
-  check("confirmation : « Votre commande a été enregistrée » + référence", body.includes("Votre commande a été enregistrée") && !!ref);
-  check("confirmation : « En attente de confirmation par la pizzeria »", body.includes("En attente de confirmation par la pizzeria."));
-  check("confirmation : sous-total, livraison à confirmer, pas de total", body.includes("3 000 HTG") && body.includes("À confirmer selon l'adresse") && !/^Total\b/m.test(body));
+  check("confirmation : « Commande enregistrée » + référence réelle", body.includes("Commande enregistrée") && !!ref);
+  check("confirmation : sous-titre « En attente de confirmation », sans prétendre confirmer paiement ni disponibilité", body.includes("En attente de confirmation") && body.includes("L'enregistrement ne confirme ni la disponibilité ni le paiement"));
+  check("confirmation : sous-total, livraison à confirmer, pas de total", body.includes("3 000 HTG") && body.includes("À confirmer") && !/^Total\b/m.test(body));
   check("confirmation : ni « reçu de paiement » ni « payée », aucun bouton payer", !/reçu de paiement/i.test(body.replace("n'est pas un reçu de paiement", "")) && !/Payée|Payé le/.test(body) && (await page.getByRole("button", { name: /Payer/ }).count()) === 0);
   check("confirmation : paiement « À organiser avec la pizzeria »", body.includes("À organiser avec la pizzeria"));
   await page.screenshot({ path: `${SHOTS}/06-order.png`, fullPage: true, caret: "initial" });
   check("confirmation : pas de défilement horizontal", await noScroll(page));
 
   // 5. Bouton WhatsApp : message complet, encodé, sans jeton
-  const waBtn = page.getByRole("link", { name: "Confirmer la livraison sur WhatsApp" });
+  const waBtn = page.getByRole("link", { name: "Confirmer sur WhatsApp" });
   const wa = await waBtn.getAttribute("href");
   check("WhatsApp : destination wa.me/50946461212", wa.startsWith("https://wa.me/50946461212?text="));
   const msg = decodeURIComponent(wa.split("?text=")[1]);
   const token = orderUrl.split("/").pop();
   for (const part of [
     `Bonjour Reina Pizza 🍕\nJe souhaite confirmer ma commande n° ${ref}.`, "COMMANDE", "• 2 × Pizza pepperoni — taille S — 3 000 HTG",
-    "Sous-total des produits : 3 000 HTG", "Livraison : À confirmer selon mon adresse", "LIVRAISON", "Nom : Marie Test", "Téléphone : +509 3412-3456",
+    "Sous-total : 3 000 HTG", "Livraison : À confirmer selon mon adresse", "LIVRAISON", "Nom : Marie Test", "Téléphone : +509 3412-3456",
     "WhatsApp : +509 3700-1122", "Commune : Delmas", "Quartier : Delmas 33", "Adresse : Rue Charbonnier, impasse Costo, n° 12", "Point de repère : En face de la pharmacie",
     "Localisation : 18.5392, -72.335", "Instructions : Sonner deux fois", "PAIEMENT", "Moyen souhaité : À convenir avec la pizzeria — espèces à la livraison",
     "Paiement à organiser directement avec la pizzeria.", "Remarques : Sans olives", "Merci de confirmer la disponibilité, les frais de livraison s'ils restent à définir et le délai estimé."]) {
@@ -142,7 +146,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("lien d'appel tel:", ((await page.getByRole("link", { name: /Appeler Reina Pizza/ }).getAttribute("href")) ?? "").startsWith("tel:+509"));
   await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: BASE });
   await page.getByRole("button", { name: "Copier le message" }).click();
-  await page.getByText("Message copié").waitFor();
+  await page.getByRole("button", { name: "Message copié" }).waitFor();
   check("« Copier le message » : contenu identique", (await page.evaluate(() => navigator.clipboard.readText())) === msg);
   const popup = await Promise.race([ctx.waitForEvent("page", { timeout: 4000 }).catch(() => null), waBtn.click().then(() => null)]);
   check("le bouton ouvre un brouillon sans rien envoyer (lien externe)", (await waBtn.getAttribute("target")) === "_blank");
@@ -162,9 +166,9 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   // 7. Connexion admin
   await ap.goto(`${BASE}/admin/login`);
   await ap.fill("#email", "intrus@reina.test"); await ap.fill("#password", "mot-de-passe-test");
-  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST"), ap.getByRole("button", { name: "Se connecter" }).click()]);
-  await ap.waitForLoadState("networkidle");
-  check("compte valide hors admin_users : refusé", ap.url().includes("/admin/login") && (await ap.getByText("Identifiants invalides").isVisible()));
+  await ap.getByRole("button", { name: "Se connecter" }).click();
+  const denied = await ap.getByText("Identifiants invalides").waitFor({ timeout: 15000 }).then(() => true, () => false);
+  check("compte valide hors admin_users : refusé", denied && ap.url().includes("/admin/login"));
   await ap.fill("#email", "admin@reina.test"); await ap.fill("#password", "mot-de-passe-test");
   await ap.getByRole("button", { name: "Se connecter" }).click();
   await ap.waitForURL(`${BASE}/admin`);
@@ -190,7 +194,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(orderUrl);
   const c2 = norm(await page.locator("main").innerText());
   check("client : voit les frais et le total", c2.includes("300 HTG") && c2.includes("3 300 HTG"));
-  const wa2 = decodeURIComponent((await page.getByRole("link", { name: "Confirmer la livraison sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
+  const wa2 = decodeURIComponent((await page.getByRole("link", { name: "Confirmer sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
   check("WhatsApp après frais : livraison et total affichés", norm(wa2).includes("Livraison : 300 HTG\nTotal : 3 300 HTG"));
 
   await ap.goto(`${BASE}/admin/commandes/${oid}`);
@@ -216,21 +220,35 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
 
   // 10. Zone tarifée : frais et total affichés avant l'enregistrement
   psql("insert into delivery_zones (name, commune, fee_minor, is_demo) values ('Zone test e2e', 'Delmas', 25000, true)");
-  await addPizza(page, "Pizza jambon", 1);
+  await addPizza(page, "Pizza pepperoni", 1); await addPizza(page, "Pizza jambon", 1); await addPizza(page, "Pizza hareng saur", 1);
   await page.goto(BASE + "/commander");
   await page.getByRole("radio", { name: /Zone test e2e/ }).check();
   await fillCustomer(page, { fullName: "Paul Zone" });
   await page.selectOption("#f-paymentMethodId", { index: 0 }).catch(() => {});
-  await page.locator("aside").getByText("1 500 HTG").first().waitFor({ timeout: 8000 }).catch(() => {});
+  await page.locator("aside").getByText("4 800 HTG").first().waitFor({ timeout: 8000 }).catch(() => {});
   const z = norm(await page.locator("aside").innerText());
-  check("zone tarifée : livraison 250 HTG et total 1 500 HTG affichés", z.includes("250 HTG") && z.includes("1 500 HTG") && /Total/.test(z), z);
+  check("zone tarifée : 3 articles, livraison 250 HTG, total 4 800 HTG", z.includes("4 550 HTG") && z.includes("250 HTG") && z.includes("4 800 HTG") && /Total/.test(z), z);
   await page.screenshot({ path: `${SHOTS}/11-checkout-zone.png`, fullPage: true, caret: "initial" });
   await submitOrder(page);
   const zr = norm(await page.locator("main").innerText());
-  check("zone tarifée : commande enregistrée avec total", zr.includes("Total") && zr.includes("1 500 HTG"));
-  check("confirmation : miniatures des articles", (await page.locator("section[aria-labelledby=articles] img").count()) >= 1);
-  const wz = decodeURIComponent((await page.getByRole("link", { name: "Confirmer la livraison sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
-  check("zone tarifée : message avec Total", norm(wz).includes("Livraison : 250 HTG\nTotal : 1 500 HTG"));
+  check("confirmation à plusieurs articles : 3 lignes, sous-total, livraison, total", (await page.locator("section[aria-labelledby=detail] li").count()) === 3 && zr.includes("Pizza pepperoni · S") && zr.includes("Pizza jambon · S") && zr.includes("Pizza hareng saur · S") && zr.includes("1 x 1 500 HTG".replace(" x ", " × ")) && zr.includes("4 550 HTG") && zr.includes("250 HTG") && zr.includes("4 800 HTG"));
+  check("confirmation : miniatures des articles", (await page.locator("section[aria-labelledby=detail] img").count()) >= 1);
+  const wz = decodeURIComponent((await page.getByRole("link", { name: "Confirmer sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
+  check("zone tarifée : message à 3 lignes avec Total", norm(wz).includes("• 1 × Pizza jambon — taille S — 1 250 HTG") && norm(wz).includes("Livraison : 250 HTG\nTotal : 4 800 HTG"));
+  await page.screenshot({ path: `${SHOTS}/confirmation-3-articles.png`, fullPage: true, caret: "initial" });
+  const zoneToken = page.url().split("/").pop();
+  for (const [st, step] of [["to_confirm", "Enregistrée"], ["confirmed", "Confirmée"], ["preparing", "En préparation"], ["out_for_delivery", "En livraison"], ["delivered", "Livrée"]]) {
+    psql(`update orders set order_status = '${st}' where access_token = '${zoneToken}'`);
+    await page.reload(); await page.waitForLoadState("networkidle");
+    const cur = await page.locator("ol[aria-label='Progression de la commande'] li[aria-current=step]").innerText().catch(() => "");
+    const doneCount = await page.locator("ol[aria-label='Progression de la commande'] li").evaluateAll((l) => l.filter((x) => x.textContent.includes("terminée")).length);
+    check(`progression « ${st} » : étape en cours ${st === "delivered" ? "(toutes terminées)" : step}`, st === "delivered" ? doneCount === 5 : cur.includes(step) && doneCount === ["to_confirm", "confirmed", "preparing", "out_for_delivery"].indexOf(st), cur + "|" + doneCount);
+    check(`statut « ${st} » : jamais « Payé » affiché`, !/\bPayée?\b|Payé le/.test(await page.locator("main").innerText()));
+  }
+  psql(`update orders set order_status = 'cancelled' where access_token = '${zoneToken}'`);
+  await page.reload(); await page.waitForLoadState("networkidle");
+  check("annulée : bandeau « annulée », aucune étape en cours ni en préparation", (await page.getByText("Cette commande a été annulée").isVisible()) && (await page.locator("li[aria-current=step]").count()) === 0 && (await page.locator("main").innerText()).includes("Commande annulée"));
+  await page.screenshot({ path: `${SHOTS}/confirmation-annulee.png`, fullPage: true, caret: "initial" });
   psql("delete from delivery_zones where name = 'Zone test e2e'");
 
   // 11. Menu admin et réglages
@@ -241,6 +259,80 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("admin réglages : moyens de paiement et devise HTG", (await ap.getByText("Moyens de paiement proposés au client").isVisible()) && (await ap.locator("select[name=currency]").inputValue()) === "HTG");
   await ap.screenshot({ path: `${SHOTS}/13-admin-settings.png`, fullPage: true, caret: "initial" });
 
+
+  // 11a. Gestion du menu (admin) : synthèse, recherche, filtre, disponibilité, éditeur de tailles, accès
+  await ap.setViewportSize({ width: 1280, height: 800 });
+  await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
+  const mm = norm(await ap.locator("main").innerText());
+  check("menu admin : titre, sous-titre, bouton « Nouveau produit »", mm.includes("Gestion du menu") && mm.includes("Produits, tailles et disponibilités") && (await ap.getByRole("link", { name: "Nouveau produit" }).isVisible()));
+  const sumText = norm(await ap.locator("[aria-label='Synthèse du menu']").innerText());
+  check("menu admin : synthèse réelle 3 produits · 3 disponibles · 3 tailles tarifées", /3\s+produits/.test(sumText) && /3\s+disponibles/.test(sumText) && /3\s+tailles tarifées/.test(sumText), sumText);
+  check("menu admin : onglets Produits et Catégories réels, pas d'onglet fictif", (await ap.locator("nav[aria-label='Sections du catalogue'] a").allInnerTexts()).join("|") === "Produits|Catégories|Suppléments");
+  check("menu admin : sidebar (Vue d'ensemble, Commandes, Menu, Livraison, Réglages), Menu actif, fil d'Ariane, compte réel", (await ap.locator("aside nav a").allInnerTexts()).map((t) => t.replace(/\d+$/, "").trim()).join("|") === "Vue d'ensemble|Commandes|Menu|Livraison|Réglages" && (await ap.locator("aside a[aria-current=page]").innerText()).includes("Menu") && (await ap.getByLabel("Fil d'Ariane").innerText()).includes("Catalogue") && (await ap.locator("header").innerText()).includes("admin@reina.test"));
+  const rows = ap.locator("tbody tr");
+  check("menu admin : 3 lignes, tailles et prix affichés, tarifs à renseigner signalés", (await rows.count()) === 3 && norm(await rows.first().innerText()).includes("S · 1 500 HTG") && norm(await rows.first().innerText()).includes("M, L, XL, XXL : tarifs à renseigner"));
+  // recherche + filtre
+  await ap.fill("#q", "jambon"); await Promise.all([ap.waitForURL(/q=jambon/), ap.getByRole("button", { name: "Filtrer" }).click()]); await ap.waitForLoadState("networkidle");
+  check("recherche « jambon » : une seule ligne", (await ap.locator("tbody tr").count()) === 1 && (await ap.locator("tbody tr").innerText()).includes("Pizza jambon"));
+  await ap.selectOption("#dispo", "unavailable"); await Promise.all([ap.waitForURL(/dispo=unavailable/), ap.getByRole("button", { name: "Filtrer" }).click()]); await ap.waitForLoadState("networkidle");
+  check("filtre « Indisponibles » + recherche : état vide utile avec réinitialisation", (await ap.getByText("Aucun produit ne correspond à cette recherche.").isVisible()) && (await ap.getByRole("link", { name: "Réinitialiser les filtres" }).isVisible()));
+  await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
+  // disponibilité
+  const hareng = ap.locator("tbody tr", { hasText: "Pizza hareng saur" });
+  const sw = hareng.getByRole("switch", { name: "Disponibilité de Pizza hareng saur" });
+  await sw.click();
+  await ap.getByText("Pizza hareng saur est maintenant indisponible.").waitFor();
+  check("disponibilité : interrupteur → sauvegarde serveur (base) et synthèse mise à jour", (await sw.getAttribute("aria-checked")) === "false" && psql("select available from products where name = 'Pizza hareng saur'") === "f" && await ap.waitForFunction(() => /2\s+disponibles/.test(document.querySelector("[aria-label='Synthèse du menu']").innerText), null, { timeout: 6000 }).then(() => true, () => false));
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  check("produit indisponible retiré du menu client", (await page.locator("article", { hasText: "Pizza hareng saur" }).count()) === 0);
+  await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
+  await ap.locator("tbody tr", { hasText: "Pizza hareng saur" }).getByRole("switch").click();
+  await ap.getByText("Pizza hareng saur est maintenant disponible.").waitFor();
+  // échec serveur : retour à la valeur précédente + erreur
+  await ap.route("**/api/admin/products/*", (r) => r.request().method() === "PATCH" ? r.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Panne simulée du serveur" }) }) : r.continue());
+  const swj = ap.locator("tbody tr", { hasText: "Pizza jambon" }).getByRole("switch");
+  await swj.click();
+  await ap.getByText("Panne simulée du serveur").waitFor();
+  check("échec de sauvegarde : valeur précédente rétablie, erreur affichée", (await swj.getAttribute("aria-checked")) === "true" && psql("select available from products where name = 'Pizza jambon'") === "t");
+  await ap.unroute("**/api/admin/products/*");
+  // éditeur de tailles et prix
+  const jambonRow = ap.locator("tbody tr", { hasText: "Pizza jambon" });
+  const opener = jambonRow.getByRole("button", { name: "Modifier les tailles et prix de Pizza jambon" });
+  await opener.click();
+  const dlg = ap.getByRole("dialog", { name: /Tailles et prix — Pizza jambon/ });
+  await dlg.waitFor(); await ap.waitForTimeout(350);
+  check("éditeur : nom du produit, 5 champs S–XXL, HTG visible, aide, M vide (jamais 0)", (await dlg.locator("input").count()) === 5 && (await dlg.getByText("HTG").count()) === 5 && (await dlg.getByText("Une taille sans prix n'est pas proposée à la commande").isVisible()) && (await dlg.locator("#size-M").inputValue()) === "" && (await dlg.locator("#size-S").inputValue()) === "1250");
+  await ap.screenshot({ path: `${SHOTS}/admin-menu-editeur-desktop.png`, fullPage: false, caret: "initial" });
+  await dlg.locator("#size-M").fill("1 400"); await dlg.locator("#size-L").fill("abc");
+  await dlg.getByRole("button", { name: "Enregistrer" }).click();
+  await dlg.getByText("Montant invalide").first().waitFor();
+  check("saisie invalide : erreur sous le champ, saisies conservées, rien d'enregistré", (await dlg.locator("#size-M").inputValue()) === "1 400" && (await dlg.locator("#size-L").inputValue()) === "abc" && psql("select count(*) from product_sizes where product_id = (select id from products where name='Pizza jambon')") === "1");
+  await dlg.locator("#size-L").fill("");
+  await dlg.getByRole("button", { name: "Enregistrer" }).click();
+  await dlg.getByText("Tarifs enregistrés.").waitFor();
+  check("enregistrement : M = 1 400 HTG en base (centimes exacts), retour de succès accessible", psql("select price_minor from product_sizes where size='M' and product_id = (select id from products where name='Pizza jambon')") === "140000" && (await dlg.locator("[role=status]").innerText()).includes("Tarifs enregistrés"));
+  await dlg.locator("#size-XL").fill("0");
+  await dlg.getByRole("button", { name: "Enregistrer" }).click();
+  check("prix 0 refusé (strictement positif)", await dlg.getByText("Le prix doit être supérieur à 0.").waitFor({ timeout: 5000 }).then(() => true, () => false));
+  // modifications non enregistrées : Échap demande confirmation
+  await ap.keyboard.press("Escape");
+  check("Échap avec modifications : confirmation avant fermeture", await ap.getByText("Modifications non enregistrées. Quitter sans enregistrer ?").isVisible());
+  await ap.getByRole("button", { name: "Continuer la saisie" }).click();
+  await dlg.locator("#size-XL").fill("");
+  await ap.keyboard.press("Escape");
+  await dlg.waitFor({ state: "detached" });
+  check("Échap sans modification : fermeture et focus rendu au bouton d'origine", await opener.evaluate((e) => e === document.activeElement));
+  await ap.reload(); await ap.waitForLoadState("networkidle");
+  check("après sauvegarde : prix et compteur actualisés (4 tailles tarifées), taille M affichée", norm(await ap.locator("tbody tr", { hasText: "Pizza jambon" }).innerText()).includes("M · 1 400 HTG") && /4\s+tailles tarifées/.test(norm(await ap.locator("[aria-label='Synthèse du menu']").innerText())), norm(await ap.locator("main").innerText()).slice(0, 700));
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  const jc = page.locator("article", { hasText: "Pizza jambon" });
+  check("côté client : la taille M du jambon devient commandable à 1 400 HTG, L reste indisponible", (await jc.getByRole("radio").count()) === 2 && norm(await jc.innerText()).includes("1 400 HTG") && (await jc.locator("[aria-disabled=true]").count()) === 3);
+  // retour à l'état initial (donnée réelle du restaurant : seul S est tarifé)
+  psql("delete from product_sizes where size = 'M' and product_id = (select id from products where name = 'Pizza jambon')");
+  // droits : mutations sans session administrateur
+  const pid = psql("select id from products where name = 'Pizza jambon'");
+  const un = [await fetch(`${BASE}/api/admin/products/${pid}`, { method: "PATCH", body: JSON.stringify({ available: false }), headers: { "Content-Type": "application/json" } }), await fetch(`${BASE}/api/admin/products/${pid}/sizes`, { method: "PUT", body: JSON.stringify({ prices: { S: "1" } }), headers: { "Content-Type": "application/json" } }), await fetch(`${BASE}/api/admin/products/${pid}`, { method: "DELETE" })];
+  check("mutations du menu sans session admin : 401 et rien modifié", un.every((r) => r.status === 401) && psql(`select s.price_minor::text || p.available::text from product_sizes s join products p on p.id = s.product_id where p.id = '${pid}' and s.size = 'S'`) === "125000true");
 
   // 11b. La photo ajoutée par l'administrateur prime sur l'illustration par défaut
   psql("update products set image_url = 'http://localhost:54321/storage/v1/object/public/menu-images/test-admin.webp' where name = 'Pizza pepperoni'");
@@ -269,7 +361,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await dctx.close();
   await ap.goto(`${BASE}/admin/menu`);
   ap.once("dialog", (d) => d.accept());
-  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST"), ap.locator("li", { hasText: "Test photo e2e" }).getByRole("button", { name: "Supprimer" }).click()]);
+  await Promise.all([ap.waitForResponse((r) => r.request().method() === "DELETE"), (async () => { await ap.locator("tr", { hasText: "Test photo e2e" }).getByRole("button", { name: /Plus d'actions/ }).click(); await ap.getByRole("menuitem", { name: "Supprimer définitivement" }).click(); })()]);
   await ap.waitForLoadState("networkidle");
   check("produit de test supprimé", psql("select count(*) from products where name = 'Test photo e2e'") === "0");
 
@@ -291,7 +383,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   }
   const pr = await ctx.newPage();
   await pr.goto(orderUrl); await pr.emulateMedia({ media: "print" });
-  check("impression : logo visible, boutons masqués, mention « pas un reçu de paiement »", ((await pr.locator("img[alt='Reina Pizza']:visible").count()) >= 1) && !(await pr.getByRole("link", { name: "Confirmer la livraison sur WhatsApp" }).isVisible()) && (await pr.getByText("ce document n'est pas un reçu de paiement").isVisible()));
+  check("impression : logo visible, boutons masqués, mention « pas un reçu de paiement »", ((await pr.locator("img[alt='Reina Pizza']:visible").count()) >= 1) && !(await pr.getByRole("link", { name: "Confirmer sur WhatsApp" }).isVisible()) && (await pr.getByText("ce document n'est pas un reçu de paiement").isVisible()));
   await pr.close();
 
   // 14. Responsive : pas de défilement horizontal de 360 px à 1440 px, captures comparables
@@ -309,6 +401,20 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
       await vp.screenshot({ path: `${SHOTS}/${name}-${label}.png`, fullPage: true, caret: "initial" });
     }
     await vc.close();
+  }
+  // Menu admin sur téléphone : cartes, éditeur de tailles accessible, aucun débordement
+  for (const w of [360, 390]) {
+    await ap.setViewportSize({ width: w, height: 800 });
+    await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
+    check(`menu admin ${w} px : cartes produit (tableau masqué), pas de défilement horizontal`, (await ap.locator("ul.md\\:hidden > li").count()) === 3 && !(await ap.locator("tbody").isVisible()) && await noScroll(ap));
+    await ap.locator("ul.md\\:hidden > li", { hasText: "Pizza pepperoni" }).getByRole("button", { name: /Modifier les tailles et prix/ }).click();
+    const md = ap.getByRole("dialog");
+    await md.waitFor(); await ap.waitForTimeout(350); // fin de l'animation d'ouverture
+    const box = await md.evaluate((d) => { const r = d.getBoundingClientRect(); const b = d.querySelector("button[type=submit]").getBoundingClientRect(); return { bottom: r.bottom, vh: innerHeight, w: r.width, vw: innerWidth, btnVisible: b.top >= 0 && b.bottom <= innerHeight + 1 || d.scrollHeight > d.clientHeight }; });
+    check(`éditeur ${w} px : panneau dans l'écran, défilable, bouton Enregistrer atteignable, pas de débordement`, box.w <= box.vw && box.bottom <= box.vh + 1 && box.btnVisible && await noScroll(ap));
+    if (w === 390) await ap.screenshot({ path: `${SHOTS}/admin-menu-editeur-mobile.png`, caret: "initial" });
+    await ap.keyboard.press("Escape"); await md.waitFor({ state: "detached" });
+    if (w === 390) await ap.screenshot({ path: `${SHOTS}/admin-menu-mobile.png`, fullPage: true, caret: "initial" });
   }
   for (const [w, h, name] of [[390, 844, "mobile390"], [1280, 800, "desktop1280"]]) {
     await ap.setViewportSize({ width: w, height: h });

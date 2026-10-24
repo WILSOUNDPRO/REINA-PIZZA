@@ -52,13 +52,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const update = useCallback((fn: (prev: CartItem[]) => CartItem[]) => {
-    setItems((prev) => {
-      const next = merge(fn(prev));
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }, []);
+  const update = useCallback((fn: (prev: CartItem[]) => CartItem[]) => setItems((prev) => merge(fn(prev))), []);
+
+  // Persistance dans un effet (pas dans la fonction de mise à jour, qui doit rester pure) : le panier survit aux navigations et rechargements.
+  useEffect(() => {
+    if (!ready) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); } catch { /* stockage indisponible */ }
+  }, [items, ready]);
 
   const value = useMemo<Ctx>(
     () => ({

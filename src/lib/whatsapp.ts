@@ -45,7 +45,7 @@ export function buildOrderMessage(o: MessageOrder, items: MessageItem[]): string
     const extras = i.extras.length ? ` (+ ${i.extras.map((e) => e.name).join(", ")})` : "";
     L.push(`• ${i.quantity} × ${i.product_name} — taille ${i.size}${extras} — ${m(i.line_total_minor)}`);
   }
-  L.push("", `Sous-total des produits : ${m(o.subtotal_minor)}`);
+  L.push("", `Sous-total : ${m(o.subtotal_minor)}`);
   L.push(`Livraison : ${feeKnown ? m(o.delivery_fee_minor!) : "À confirmer selon mon adresse"}`);
   if (feeKnown) L.push(`Total : ${m(o.total_minor!)}`);
 

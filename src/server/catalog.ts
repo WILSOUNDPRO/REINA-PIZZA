@@ -23,9 +23,9 @@ export async function getPublicCatalog(sql: Sql) {
     select p.id, p.name, p.description, p.image_url, p.default_image, p.is_demo, p.category_id, c.name as category_name,
       coalesce((select json_agg(json_build_object('size', s.size, 'price_minor', s.price_minor)
           order by array_position(${sql.unsafe(SIZE_ORDER)}, s.size))
-        from product_sizes s where s.product_id = p.id and s.available), '[]'::json) as sizes
+        from product_sizes s where s.product_id = p.id and s.available and s.price_minor > 0), '[]'::json) as sizes
     from products p left join categories c on c.id = p.category_id
-    where p.available and (c.id is null or c.active)
+    where p.available and p.archived_at is null and (c.id is null or c.active)
     order by coalesce(c.position, 9999), c.name nulls last, p.position, p.name`;
   const extras = await sql<CatalogExtra[]>`
     select id, name, price_minor, is_demo from extras where available order by position, name`;

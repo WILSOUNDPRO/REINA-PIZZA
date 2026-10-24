@@ -125,7 +125,7 @@ describe("message WhatsApp complet", () => {
     const t = buildOrderMessage(order, items);
     expect(t).toContain("Bonjour Reina Pizza 🍕\nJe souhaite confirmer ma commande n° RP-ABC234.");
     expect(t).toContain("• 2 × Pizza pepperoni — taille S — 3 000 HTG");
-    expect(t).toContain("Sous-total des produits : 3 000 HTG\nLivraison : À confirmer selon mon adresse");
+    expect(t).toContain("Sous-total : 3 000 HTG\nLivraison : À confirmer selon mon adresse");
     expect(t).not.toMatch(/^Total :/m);
     for (const absent of ["WhatsApp :", "Localisation :", "Instructions :", "Remarques :"]) expect(t).not.toContain(absent);
     expect(t).toContain("Téléphone : +509 3412-3456");

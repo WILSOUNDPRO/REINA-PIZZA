@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, MessageCircle, Phone } from "lucide-react";
+import { Check, Copy, MessageCircle, Phone, Printer } from "lucide-react";
 
 // Le bouton ouvre un BROUILLON WhatsApp : le client doit l'envoyer lui-même. Rien n'est envoyé automatiquement.
 export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: string; message: string; phoneHref: string }) {
@@ -10,26 +10,28 @@ export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: stri
     try {
       await navigator.clipboard.writeText(message);
       setState("ok");
+      setTimeout(() => setState("idle"), 2500);
     } catch {
       // Repli : sélection manuelle du texte affiché dans le champ ci-dessous.
       setState("fail");
-      (document.getElementById("order-message") as HTMLTextAreaElement | null)?.select();
+      requestAnimationFrame(() => (document.getElementById("order-message") as HTMLTextAreaElement | null)?.select());
     }
-    setTimeout(() => setState((s) => (s === "fail" ? "fail" : "idle")), 2500);
   }
   return (
     <div className="no-print space-y-3">
-      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={20} aria-hidden="true" />Confirmer la livraison sur WhatsApp</a>
-      <p className="text-xs text-ink-soft">Le message WhatsApp contiendra votre commande et vos coordonnées de livraison pour Reina Pizza.</p>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button type="button" className="btn btn-ghost flex-1" onClick={copy}>{state === "ok" ? <><Check size={18} aria-hidden="true" />Message copié</> : <><Copy size={18} aria-hidden="true" />Copier le message</>}</button>
-        <a className="btn btn-ghost flex-1" href={phoneHref}><Phone size={18} aria-hidden="true" />Appeler Reina Pizza</a>
+      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={20} aria-hidden="true" />Confirmer sur WhatsApp</a>
+      <p className="text-center text-xs text-ink-soft">Le message WhatsApp contiendra votre commande et vos coordonnées de livraison pour Reina Pizza.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="btn btn-ghost" onClick={copy}>{state === "ok" ? <><Check size={18} aria-hidden="true" />Message copié</> : <><Copy size={18} aria-hidden="true" />Copier le message</>}</button>
+        <button type="button" className="btn btn-ghost" onClick={() => window.print()}><Printer size={18} aria-hidden="true" />Imprimer</button>
       </div>
+      <a className="btn btn-ghost w-full" href={phoneHref}><Phone size={18} aria-hidden="true" />Appeler Reina Pizza</a>
+      <p role="status" aria-live="polite" className={state === "idle" ? "sr-only" : "text-center text-sm font-semibold"}>{state === "ok" ? "Message copié dans le presse-papiers." : state === "fail" ? "Copie automatique impossible : le texte ci-dessous est sélectionné, copiez-le puis collez-le dans WhatsApp." : ""}</p>
       <details open={state === "fail"} className="text-sm">
-        <summary className="cursor-pointer font-bold">Voir le message</summary>
+        <summary className="inline-flex min-h-11 cursor-pointer items-center font-bold">Voir le message</summary>
         <textarea id="order-message" readOnly value={message} rows={14} className="field mt-2 text-xs" aria-label="Message WhatsApp" />
-        {state === "fail" && <p role="alert" className="mt-1 font-bold text-tomato">Copie automatique impossible : le texte est sélectionné, copiez-le puis collez-le dans WhatsApp.</p>}
       </details>
+      <p className="flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft"><Check size={14} aria-hidden="true" />Votre commande est déjà enregistrée.</p>
     </div>
   );
 }

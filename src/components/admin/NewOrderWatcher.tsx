@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Bell, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -76,19 +77,20 @@ export function NewOrderWatcher() {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm" role="status" aria-live="polite">
+    <div className="flex items-center justify-end gap-2 text-sm" role="status" aria-live="polite">
       {poll && poll.unacknowledged > 0 && (
-        <Link href="/admin/commandes?vue=nouvelles" className={`badge !px-3 !py-1.5 text-sm ${flash ? "animate-pulse bg-tomato text-white" : "bg-tomato text-white"}`}>
-          🔔 {poll.unacknowledged} nouvelle{poll.unacknowledged > 1 ? "s" : ""} commande{poll.unacknowledged > 1 ? "s" : ""}
+        <Link href="/admin/commandes?vue=nouvelles" aria-label={`${poll.unacknowledged} nouvelle${poll.unacknowledged > 1 ? "s" : ""} commande${poll.unacknowledged > 1 ? "s" : ""}`}
+          className={`inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-xl bg-tomato px-3 font-semibold text-white ${flash ? "animate-pulse" : ""}`}>
+          <Bell size={17} aria-hidden="true" /><span aria-hidden="true">{poll.unacknowledged}<span className="hidden xl:inline"> nouvelle{poll.unacknowledged > 1 ? "s" : ""} commande{poll.unacknowledged > 1 ? "s" : ""}</span></span>
         </Link>
       )}
       {poll && poll.feesToConfirm > 0 && (
-        <Link href="/admin/commandes?frais=1" className="badge !px-3 !py-1.5 bg-amber-200 text-sm text-amber-950">
-          {poll.feesToConfirm} frais à confirmer
+        <Link href="/admin/commandes?frais=1" aria-label={`${poll.feesToConfirm} frais de livraison à confirmer`} className="inline-flex min-h-11 items-center whitespace-nowrap rounded-xl bg-amber-200 px-3 font-semibold text-amber-950">
+          <span aria-hidden="true">{poll.feesToConfirm}<span className="hidden xl:inline"> frais à confirmer</span><span className="xl:hidden"> frais</span></span>
         </Link>
       )}
-      <button type="button" onClick={toggleSound} className="btn btn-ghost !min-h-9 !px-3 text-xs" aria-pressed={sound}>
-        {sound ? "🔊 Son activé" : "🔇 Activer le son"}
+      <button type="button" onClick={toggleSound} className="btn btn-ghost !px-3" aria-pressed={sound} aria-label={sound ? "Désactiver l'alerte sonore" : "Activer l'alerte sonore"} title={sound ? "Alerte sonore activée" : "Activer l'alerte sonore"}>
+        {sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}<span className="hidden 2xl:inline">{sound ? "Son activé" : "Activer le son"}</span>
       </button>
     </div>
   );

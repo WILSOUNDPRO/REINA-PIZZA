@@ -6,6 +6,7 @@ import { getSql } from "@/server/db";
 import { requireAdmin, passwordLogin, setSessionCookies, clearSession } from "@/server/admin/auth";
 import { uploadMenuImage } from "@/server/admin/storage";
 import { setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
+import { deleteProduct } from "@/server/menu";
 import { allow, clientKey } from "@/server/ratelimit";
 import { bool, int, money, str } from "@/server/admin/money-input";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/labels";
@@ -120,7 +121,7 @@ export async function saveProductAction(formData: FormData) {
   for (const s of SIZES) {
     if (!bool(formData, `size_${s}_on`)) continue;
     const price = money(formData, `size_${s}_price`);
-    if (price === null) back(path, `Prix invalide pour la taille ${s}.`, false);
+    if (price === null || price <= 0) back(path, `Prix invalide pour la taille ${s} (strictement supérieur à 0).`, false);
     sizes.push({ size: s, price });
     offered.push(s);
   }
@@ -158,19 +159,11 @@ export async function saveProductAction(formData: FormData) {
   back(`/admin/menu/${productId}`, "Produit enregistré.");
 }
 
-export async function toggleProductAction(formData: FormData) {
-  await requireAdmin();
-  const id = str(formData, "id");
-  if (isUuid(id)) await getSql()`update products set available = not available where id = ${id}`;
-  back("/admin/menu", "Disponibilité mise à jour.");
-}
-
 export async function deleteProductAction(formData: FormData) {
   await requireAdmin();
   const id = str(formData, "id");
-  // Les commandes passées gardent leurs lignes (instantané) ; le lien vers le produit est simplement vidé.
-  if (isUuid(id)) await getSql()`delete from products where id = ${id}`;
-  back("/admin/menu", "Produit supprimé. Les anciennes commandes ne changent pas.");
+  const r = isUuid(id) ? await deleteProduct(getSql(), id) : { ok: false as const, message: "Requête invalide." };
+  back("/admin/menu", r.ok ? "Produit supprimé. Les anciennes commandes ne changent pas." : r.message, r.ok);
 }
 
 export async function deleteDemoDataAction() {
