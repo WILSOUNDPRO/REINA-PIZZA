@@ -1,7 +1,8 @@
 import { getSql } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { env } from "@/server/env";
-import { deleteMethodAction, saveMethodAction, saveSettingsAction } from "../../actions";
+import Link from "next/link";
+import { saveSettingsAction } from "../../actions";
 import { Flash } from "@/components/admin/Flash";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
@@ -10,7 +11,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const sql = getSql();
   const s = await getSettings(sql);
   const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from orders`;
-  const methods = await sql<{ id: string; label: string; enabled: boolean; position: number }[]>`select * from payment_methods order by position, label`;
   return (
     <div className="max-w-2xl space-y-5">
       <Flash sp={sp} />
@@ -45,25 +45,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <SubmitButton className="btn btn-primary btn-lg">Enregistrer</SubmitButton>
       </form>
 
-      <section className="card space-y-3 p-5" aria-labelledby="moyens">
-        <h2 id="moyens" className="text-xl font-bold">Moyens de paiement proposés au client</h2>
-        <p className="text-sm text-ink-soft">Aucun paiement n'a lieu sur le site : le client indique le moyen souhaité, puis le règlement est organisé avec la pizzeria. N'ajoutez que les moyens réellement acceptés.</p>
-        {methods.map((m) => (
-          <div key={m.id} className="flex flex-wrap items-end gap-2">
-            <form action={saveMethodAction} className="flex flex-1 flex-wrap items-end gap-2">
-              <input type="hidden" name="id" value={m.id} />
-              <label className="min-w-40 flex-1 text-sm font-bold">Libellé<input name="label" defaultValue={m.label} required maxLength={80} className="field mt-1" /></label>
-              <label className="w-24 text-sm font-bold">Ordre<input name="position" type="number" defaultValue={m.position} className="field mt-1" /></label>
-              <label className="flex min-h-12 items-center gap-2 text-sm font-bold"><input type="checkbox" name="enabled" defaultChecked={m.enabled} className="h-5 w-5" />Activé</label>
-              <SubmitButton className="btn btn-basil !min-h-12">Enregistrer</SubmitButton>
-            </form>
-            <form action={deleteMethodAction}><input type="hidden" name="id" value={m.id} /><SubmitButton className="btn btn-ghost !min-h-12" confirm="Supprimer ce moyen ? Les anciennes commandes gardent leur choix.">Supprimer</SubmitButton></form>
-          </div>
-        ))}
-        <form action={saveMethodAction} className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
-          <label className="min-w-40 flex-1 text-sm font-bold">Nouveau moyen<input name="label" required maxLength={80} className="field mt-1" /></label>
-          <SubmitButton className="btn btn-primary !min-h-12">Ajouter</SubmitButton>
-        </form>
+      <section className="card space-y-1 p-5 text-sm">
+        <h2 className="text-lg font-bold">Moyens de paiement</h2>
+        <p>Les moyens proposés aux clients (MonCash, etc.) se gèrent dans <Link className="font-bold underline" href="/admin/moyens-paiement">Moyens de paiement</Link>.</p>
       </section>
 
       <section className="card space-y-1 p-5 text-sm">

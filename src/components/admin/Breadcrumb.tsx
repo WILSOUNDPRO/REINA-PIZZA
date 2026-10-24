@@ -8,6 +8,7 @@ const MAP: Record<string, string[]> = {
   "/admin/menu": ["Catalogue", "Menu"],
   "/admin/supplements": ["Catalogue", "Suppléments"],
   "/admin/zones": ["Livraison"],
+  "/admin/moyens-paiement": ["Paiement", "Moyens de paiement"],
   "/admin/reglages": ["Réglages"],
 };
 

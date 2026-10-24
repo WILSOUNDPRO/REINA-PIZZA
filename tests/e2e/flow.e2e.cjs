@@ -41,6 +41,8 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   psql("delete from products where name = 'Test photo e2e'");
   psql("delete from product_sizes where size <> 'S' and product_id in (select id from products where name like 'Pizza %')");
   psql("update products set available = true, archived_at = null, image_url = null where name like 'Pizza %'");
+  psql("update payment_methods set enabled = true, instructions = null, recipient_account = null, recipient_name = null, label = 'MonCash' where label like 'MonCash%'");
+  psql("delete from payment_methods where label = 'Test e2e'");
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
@@ -88,17 +90,18 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const form = norm(await page.locator("main").innerText());
   check("formulaire : message frais à confirmer", form.includes("Frais de livraison à confirmer selon votre adresse."));
   check("formulaire : sous-total sans ligne « Total »", form.includes("Sous-total des produits") && !/^Total\b/m.test(form));
-  check("formulaire : « Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza. »", form.includes("Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza."));
+  check("formulaire : « Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande. »", form.includes("Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande."));
   check("formulaire : aucun champ carte/PIN/mot de passe", (await page.locator("input[type=password], input[autocomplete^=cc-], input[name*=card i], input[name*=pin i]").count()) === 0);
-  check("formulaire : option « À convenir avec la pizzeria »", await page.locator("#f-paymentMethodId option", { hasText: "À convenir avec la pizzeria" }).count() === 1);
+  check("formulaire : seuls les moyens activés sont proposés — MonCash disponible, ordre respecté", (await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts()).join("|") === "À convenir avec la pizzeria|MonCash");
   await page.getByRole("button", { name: "Enregistrer ma commande" }).click();
-  check("validation : champs obligatoires signalés ; moyen de paiement unique présélectionné", (await page.getByText("Le nom complet est obligatoire.").isVisible()) && (await page.getByText("L'adresse précise est obligatoire.").isVisible()) && (await page.inputValue("#f-paymentMethodId")) !== "");
+  check("validation : champs obligatoires signalés, dont le moyen de paiement souhaité", (await page.getByText("Le nom complet est obligatoire.").isVisible()) && (await page.getByText("L'adresse précise est obligatoire.").isVisible()) && (await page.getByText("Choisissez le moyen de paiement souhaité.").count()) > 0);
   await page.screenshot({ path: `${SHOTS}/04-checkout-errors.png`, fullPage: true, caret: "initial" });
   await fillCustomer(page, { phone: "12" });
   await page.getByRole("button", { name: "Enregistrer ma commande" }).click();
   check("validation : téléphone invalide", await page.getByText(/Le numéro de téléphone invalide/).isVisible());
   await fillCustomer(page);
-  await page.fill("#f-paymentMethodNote", "espèces à la livraison");
+  await page.selectOption("#f-paymentMethodId", { label: "MonCash" });
+  await page.fill("#f-paymentMethodNote", "depuis mon numéro MonCash");
   await page.fill("#f-deliveryInstructions", "Sonner deux fois");
   await page.fill("#f-notes", "Sans olives");
   await page.fill("#f-gps", "18.5392, -72.3350");
@@ -109,7 +112,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   psql("update settings set orders_paused = true, pause_message = 'Pause test'");
   await page.getByRole("button", { name: "Enregistrer ma commande" }).click();
   await page.getByText("Pause test").first().waitFor();
-  check("erreur serveur : message affiché et champs conservés", (await page.inputValue("#f-fullName")) === "Marie Test" && (await page.inputValue("#f-notes")) === "Sans olives" && (await page.inputValue("#f-paymentMethodNote")) === "espèces à la livraison");
+  check("erreur serveur : message affiché et champs conservés", (await page.inputValue("#f-fullName")) === "Marie Test" && (await page.inputValue("#f-notes")) === "Sans olives" && (await page.inputValue("#f-paymentMethodNote")) === "depuis mon numéro MonCash");
   psql("update settings set orders_paused = false, pause_message = null");
 
   // 4. Enregistrement + double clic
@@ -137,7 +140,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
     `Bonjour Reina Pizza 🍕\nJe souhaite confirmer ma commande n° ${ref}.`, "COMMANDE", "• 2 × Pizza pepperoni — taille S — 3 000 HTG",
     "Sous-total : 3 000 HTG", "Livraison : À confirmer selon mon adresse", "LIVRAISON", "Nom : Marie Test", "Téléphone : +509 3412-3456",
     "WhatsApp : +509 3700-1122", "Commune : Delmas", "Quartier : Delmas 33", "Adresse : Rue Charbonnier, impasse Costo, n° 12", "Point de repère : En face de la pharmacie",
-    "Localisation : 18.5392, -72.335", "Instructions : Sonner deux fois", "PAIEMENT", "Moyen souhaité : À convenir avec la pizzeria — espèces à la livraison",
+    "Localisation : 18.5392, -72.335", "Instructions : Sonner deux fois", "PAIEMENT", "Moyen souhaité : MonCash — depuis mon numéro MonCash",
     "Paiement à organiser directement avec la pizzeria.", "Remarques : Sans olives", "Merci de confirmer la disponibilité, les frais de livraison s'ils restent à définir et le délai estimé."]) {
     check(`WhatsApp message contient « ${part.split("\n")[0].slice(0, 45)} »`, norm(msg).includes(part), norm(msg));
   }
@@ -183,7 +186,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const oid = psql(`select id from orders where ref='${ref}'`);
   await ap.goto(`${BASE}/admin/commandes/${oid}`);
   const det = norm(await ap.locator("main").innerText());
-  check("admin : détail (articles, adresse, paiement souhaité, remarques, sous-total, frais à confirmer)", ["Pizza pepperoni", "Rue Charbonnier, impasse Costo", "À convenir avec la pizzeria — espèces à la livraison", "Sans olives", "Sonner deux fois", "3 000 HTG", "À confirmer"].every((x) => det.includes(x)));
+  check("admin : détail (articles, adresse, paiement souhaité, remarques, sous-total, frais à confirmer)", ["Pizza pepperoni", "Rue Charbonnier, impasse Costo", "MonCash — depuis mon numéro MonCash", "Sans olives", "Sonner deux fois", "3 000 HTG", "À confirmer"].every((x) => det.includes(x)));
   check("admin : boutons appeler et WhatsApp client", ((await ap.getByRole("link", { name: /Appeler le client/ }).getAttribute("href")) === "tel:+50934123456") && (await ap.getByRole("link", { name: "Contacter le client sur WhatsApp" }).getAttribute("href")).startsWith("https://wa.me/50937001122"));
   await ap.screenshot({ path: `${SHOTS}/09-admin-order.png`, fullPage: true, caret: "initial" });
 
@@ -224,7 +227,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/commander");
   await page.getByRole("radio", { name: /Zone test e2e/ }).check();
   await fillCustomer(page, { fullName: "Paul Zone" });
-  await page.selectOption("#f-paymentMethodId", { index: 0 }).catch(() => {});
+  await page.selectOption("#f-paymentMethodId", { label: "À convenir avec la pizzeria" });
   await page.locator("aside").getByText("4 800 HTG").first().waitFor({ timeout: 8000 }).catch(() => {});
   const z = norm(await page.locator("aside").innerText());
   check("zone tarifée : 3 articles, livraison 250 HTG, total 4 800 HTG", z.includes("4 550 HTG") && z.includes("250 HTG") && z.includes("4 800 HTG") && /Total/.test(z), z);
@@ -256,9 +259,63 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("admin menu : 3 produits réels", (await ap.getByText("Pizza pepperoni").first().isVisible()) && (await ap.getByText("Pizza jambon").first().isVisible()) && (await ap.getByText("Pizza hareng saur").first().isVisible()));
   await ap.screenshot({ path: `${SHOTS}/12-admin-menu.png`, fullPage: true, caret: "initial" });
   await ap.goto(`${BASE}/admin/reglages`); await ap.waitForLoadState("networkidle");
-  check("admin réglages : moyens de paiement et devise HTG", (await ap.getByText("Moyens de paiement proposés au client").isVisible()) && (await ap.locator("select[name=currency]").inputValue()) === "HTG");
+  check("admin réglages : devise HTG et renvoi vers « Moyens de paiement »", (await ap.getByRole("link", { name: "Moyens de paiement" }).first().isVisible()) && (await ap.locator("select[name=currency]").inputValue()) === "HTG");
   await ap.screenshot({ path: `${SHOTS}/13-admin-settings.png`, fullPage: true, caret: "initial" });
 
+
+  // 10b. Moyens de paiement (hors site) : MonCash, administration, formulaire, confirmation, instantané
+  await ap.setViewportSize({ width: 1280, height: 800 });
+  await ap.goto(`${BASE}/admin/moyens-paiement`); await ap.waitForLoadState("networkidle");
+  const mcForm = ap.locator("form:has(input[name=label][value='MonCash'])").first();
+  check("admin moyens de paiement : MonCash activé, coordonnées de réception vides (non supposées), alerte à compléter", (await mcForm.locator("input[name=enabled]").isChecked()) && (await mcForm.locator("input[name=recipientAccount]").inputValue()) === "" && (await mcForm.locator("input[name=recipientName]").inputValue()) === "" && (await ap.getByText("n'est pas supposé identique au numéro de contact de Reina Pizza").isVisible()));
+  check("admin moyens de paiement : rappel « aucun paiement n'est effectué sur le site »", await ap.getByText("Aucun paiement n'est effectué sur le site.").first().isVisible());
+  await mcForm.locator("textarea[name=instructions]").fill("Instruction test e2e");
+  await mcForm.locator("input[name=recipientAccount]").fill("3800-1234");
+  await mcForm.locator("input[name=recipientName]").fill("Bénéficiaire e2e");
+  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/admin/moyens-paiement")), mcForm.getByRole("button", { name: "Enregistrer" }).click()]);
+  await ap.waitForLoadState("networkidle");
+  check("admin : instructions, compte et bénéficiaire enregistrés", psql("select instructions || '|' || recipient_account || '|' || recipient_name from payment_methods where label = 'MonCash'") === "Instruction test e2e|3800-1234|Bénéficiaire e2e");
+  await ap.screenshot({ path: `${SHOTS}/admin-moyens-paiement.png`, fullPage: true, caret: "initial" });
+  // formulaire client : instructions du moyen choisi
+  await addPizza(page, "Pizza pepperoni", 1);
+  await page.goto(BASE + "/commander"); await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor();
+  await page.selectOption("#f-paymentMethodId", { label: "MonCash" });
+  check("formulaire : instructions de MonCash affichées au choix, sans le numéro de réception", (await page.getByText("Instruction test e2e").isVisible()) && !(await page.locator("main").innerText()).includes("3800-1234"));
+  await page.screenshot({ path: `${SHOTS}/checkout-moncash.png`, fullPage: true, caret: "initial" });
+  await page.evaluate(() => localStorage.setItem("reina-cart-v1", "[]"));
+  // confirmation : instructions visibles seulement après confirmation de la commande
+  await page.goto(orderUrl); await page.waitForLoadState("networkidle");
+  const pay1 = norm(await page.locator("section[aria-labelledby=paiement]").innerText());
+  check("confirmation (commande livrée) : MonCash choisi + instructions et coordonnées de réception renseignées par l'admin", pay1.includes("MonCash") && pay1.includes("Instructions de paiement — MonCash") && pay1.includes("3800-1234") && pay1.includes("Bénéficiaire e2e") && pay1.includes("Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande."));
+  psql(`update orders set order_status = 'to_confirm' where ref = '${ref}'`);
+  await page.reload(); await page.waitForLoadState("networkidle");
+  const pay2 = norm(await page.locator("section[aria-labelledby=paiement]").innerText());
+  check("confirmation (en attente) : coordonnées masquées jusqu'à la confirmation de la commande", !pay2.includes("3800-1234") && pay2.includes("s'afficheront ici après confirmation de la commande par Reina Pizza"));
+  psql(`update orders set order_status = 'delivered' where ref = '${ref}'`);
+  const waMc = decodeURIComponent((await page.getByRole("link", { name: "Confirmer sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
+  check("WhatsApp : moyen choisi inclus, numéro de réception jamais inclus", waMc.includes("Moyen souhaité : MonCash — depuis mon numéro MonCash") && !waMc.includes("3800-1234"));
+  // ajout, désactivation, instantané
+  await ap.goto(`${BASE}/admin/moyens-paiement`); await ap.waitForLoadState("networkidle");
+  const addForm = ap.locator("section[aria-labelledby=ajout] form");
+  await addForm.locator("input[name=label]").fill("Test e2e"); await addForm.locator("input[name=position]").fill("5");
+  await adminAction(ap, "Ajouter", "/admin/moyens-paiement");
+  check("admin : moyen ajouté", psql("select count(*) from payment_methods where label = 'Test e2e' and enabled") === "1");
+  await page.goto(BASE + "/commander"); await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor().catch(() => {});
+  psql("update payment_methods set enabled = false where label = 'MonCash'");
+  await ap.goto(`${BASE}/admin/moyens-paiement`); await ap.waitForLoadState("networkidle");
+  await addPizza(page, "Pizza pepperoni", 1);
+  await page.goto(BASE + "/commander"); await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor();
+  check("MonCash désactivé : n'est plus proposé, les autres moyens activés le restent", (await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts()).join("|") === "À convenir avec la pizzeria|Test e2e");
+  await page.evaluate(() => localStorage.setItem("reina-cart-v1", "[]"));
+  check("commande existante : le nom du moyen choisi est conservé après désactivation", psql(`select payment_method from orders where ref = '${ref}'`) === "MonCash");
+  await ap.goto(`${BASE}/admin/commandes/${oid}`);
+  check("admin : détail de commande avec le moyen choisi (instantané)", norm(await ap.locator("section[aria-labelledby=paiement]").innerText()).includes("MonCash — depuis mon numéro MonCash"));
+  psql("update payment_methods set enabled = true where label = 'MonCash'");
+  psql("update payment_methods set label = 'MonCash renommé' where label = 'MonCash'");
+  await page.goto(orderUrl); await page.waitForLoadState("networkidle");
+  check("moyen renommé : la commande affiche toujours le nom choisi, sans instructions d'un autre libellé", (await page.locator("section[aria-labelledby=paiement]").innerText()).includes("MonCash") && !(await page.locator("section[aria-labelledby=paiement]").innerText()).includes("Bénéficiaire e2e"));
+  psql("update payment_methods set label = 'MonCash' where label = 'MonCash renommé'");
+  psql("delete from payment_methods where label = 'Test e2e'");
 
   // 11a. Gestion du menu (admin) : synthèse, recherche, filtre, disponibilité, éditeur de tailles, accès
   await ap.setViewportSize({ width: 1280, height: 800 });
@@ -268,7 +325,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const sumText = norm(await ap.locator("[aria-label='Synthèse du menu']").innerText());
   check("menu admin : synthèse réelle 3 produits · 3 disponibles · 3 tailles tarifées", /3\s+produits/.test(sumText) && /3\s+disponibles/.test(sumText) && /3\s+tailles tarifées/.test(sumText), sumText);
   check("menu admin : onglets Produits et Catégories réels, pas d'onglet fictif", (await ap.locator("nav[aria-label='Sections du catalogue'] a").allInnerTexts()).join("|") === "Produits|Catégories|Suppléments");
-  check("menu admin : sidebar (Vue d'ensemble, Commandes, Menu, Livraison, Réglages), Menu actif, fil d'Ariane, compte réel", (await ap.locator("aside nav a").allInnerTexts()).map((t) => t.replace(/\d+$/, "").trim()).join("|") === "Vue d'ensemble|Commandes|Menu|Livraison|Réglages" && (await ap.locator("aside a[aria-current=page]").innerText()).includes("Menu") && (await ap.getByLabel("Fil d'Ariane").innerText()).includes("Catalogue") && (await ap.locator("header").innerText()).includes("admin@reina.test"));
+  check("menu admin : sidebar (Vue d'ensemble, Commandes, Menu, Livraison, Réglages), Menu actif, fil d'Ariane, compte réel", (await ap.locator("aside nav a").allInnerTexts()).map((t) => t.replace(/\d+$/, "").trim()).join("|") === "Vue d'ensemble|Commandes|Menu|Livraison|Moyens de paiement|Réglages" && (await ap.locator("aside a[aria-current=page]").innerText()).includes("Menu") && (await ap.getByLabel("Fil d'Ariane").innerText()).includes("Catalogue") && (await ap.locator("header").innerText()).includes("admin@reina.test"));
   const rows = ap.locator("tbody tr");
   check("menu admin : 3 lignes, tailles et prix affichés, tarifs à renseigner signalés", (await rows.count()) === 3 && norm(await rows.first().innerText()).includes("S · 1 500 HTG") && norm(await rows.first().innerText()).includes("M, L, XL, XXL : tarifs à renseigner"));
   // recherche + filtre
