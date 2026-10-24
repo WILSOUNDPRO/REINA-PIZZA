@@ -130,7 +130,7 @@ describe("message WhatsApp complet", () => {
     for (const absent of ["WhatsApp :", "Localisation :", "Instructions :", "Remarques :"]) expect(t).not.toContain(absent);
     expect(t).toContain("Téléphone : +509 3412-3456");
     expect(t).toContain("Moyen souhaité : À convenir avec la pizzeria\nPaiement à organiser directement avec la pizzeria.");
-    expect(t).toContain("confirmer la disponibilité, les frais de livraison et le délai estimé");
+    expect(t).toContain("Merci de confirmer la disponibilité, les frais de livraison s'ils restent à définir et le délai estimé.");
     expect(t).not.toMatch(/\n\n\n/);
   });
   it("frais connus : total affiché, toutes les lignes facultatives présentes", () => {
@@ -142,8 +142,7 @@ describe("message WhatsApp complet", () => {
     expect(t).toContain("Instructions : Sonner deux fois");
     expect(t).toContain("Moyen souhaité : À convenir avec la pizzeria — espèces");
     expect(t).toContain("Remarques : Sans oignon");
-    expect(t).toContain("confirmer la disponibilité et le délai estimé");
-    expect(t).not.toContain("les frais de livraison et");
+    expect(t).toContain("Merci de confirmer la disponibilité, les frais de livraison s'ils restent à définir et le délai estimé.");
   });
   it("encodé sans perte dans l'URL, et jamais de jeton", () => {
     const t = buildOrderMessage({ ...order, address: "Rue & « test » 100% #1 ?x=y" }, items);

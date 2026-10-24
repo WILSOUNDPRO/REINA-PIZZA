@@ -15,7 +15,7 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteHeader />
       <main id="contenu">{children}</main>
       <SiteFooter s={settings} />
-      <MobileCartBar />
+      <MobileCartBar currency={settings.currency} />
     </CartProvider>
   );
 }

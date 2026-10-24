@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "./CartProvider";
 import { useServerCart } from "./useServerCart";
 import { ProductImage } from "./ProductCard";
@@ -17,7 +18,8 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
   if (items.length === 0) {
     return (
       <div className="card p-8 text-center">
-        <p className="font-display text-2xl font-bold">Votre panier est vide.</p>
+        <p className="text-2xl font-extrabold">Votre panier est vide.</p>
+        <p className="mt-1 text-ink-soft">Ajoutez une pizza pour commencer.</p>
         <Link href="/menu" className="btn btn-primary mt-4">Voir le menu</Link>
       </div>
     );
@@ -32,36 +34,35 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
     <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <div className="space-y-3">
         {problems.map((p) => (
-          <div key={p.key} role="alert" className="flex items-center justify-between gap-3 rounded-2xl border-2 border-tomato bg-paper p-4">
+          <div key={p.key} role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-tomato bg-white p-4">
             <p className="text-sm"><strong>{p.productName}</strong> n'est plus disponible à la commande.</p>
-            <button className="btn btn-ghost !min-h-10 text-sm" onClick={() => remove(p.key)}>Retirer</button>
+            <button className="btn btn-ghost !min-h-11 text-sm" onClick={() => remove(p.key)}>Retirer</button>
           </div>
         ))}
         {lines.map((l) => (
           <article key={l.key} className="card flex gap-3 p-3 sm:p-4">
-            <ProductImage url={l.imageUrl} name={l.productName} className="h-20 w-20 shrink-0 rounded-2xl sm:h-24 sm:w-24" />
+            <ProductImage url={l.imageUrl} name={l.productName} className="h-20 w-20 shrink-0 rounded-xl sm:h-24 sm:w-24" sizes="96px" />
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
-                <h2 className="font-display text-lg font-bold leading-tight">{l.productName}</h2>
-                <button className="-mr-1 grid h-10 w-10 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-cream-2" onClick={() => remove(l.key)} aria-label={`Supprimer ${l.productName}`}>✕</button>
+                <h2 className="text-base font-extrabold leading-tight sm:text-lg">{l.productName}</h2>
+                <button className="-mr-2 -mt-1 grid h-11 w-11 shrink-0 place-items-center rounded-lg text-ink-soft hover:bg-cream-2 hover:text-tomato" onClick={() => remove(l.key)} aria-label={`Supprimer ${l.productName} du panier`}><Trash2 size={18} aria-hidden="true" /></button>
               </div>
-              {l.isDemo && <span className="badge bg-cream-2 text-ink-soft">Démonstration</span>}
               {l.extras.length > 0 && <p className="text-xs text-ink-soft">+ {l.extras.map((e) => e.name).join(", ")}</p>}
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <label className="flex items-center gap-2 text-sm">
                   <span className="text-ink-soft">Taille</span>
-                  <select className="field !min-h-10 !w-auto !py-1" value={l.size} onChange={(e) => setSize(lineKey({ productId: l.productId, size: l.size, extraIds: l.extras.map((x) => x.id) }), e.target.value as Size)}>
-                    {l.availableSizes.map((s) => (
-                      <option key={s.size} value={s.size}>{s.size} · {formatMoney(s.priceMinor, currency)}</option>
-                    ))}
-                  </select>
+                  {l.availableSizes.length > 1 ? (
+                    <select className="field !min-h-11 !w-auto !py-1" value={l.size} onChange={(e) => setSize(lineKey({ productId: l.productId, size: l.size, extraIds: l.extras.map((x) => x.id) }), e.target.value as Size)}>
+                      {l.availableSizes.map((s) => <option key={s.size} value={s.size}>{s.size} · {formatMoney(s.priceMinor, currency)}</option>)}
+                    </select>
+                  ) : <strong>{l.size}</strong>}
                 </label>
                 <div className="flex items-center gap-1" role="group" aria-label={`Quantité de ${l.productName}`}>
-                  <button className="stepper-btn" onClick={() => setQuantity(l.key, l.quantity - 1)} aria-label="Moins">−</button>
+                  <button className="stepper-btn" onClick={() => setQuantity(l.key, l.quantity - 1)} aria-label="Retirer une pizza"><Minus size={16} aria-hidden="true" /></button>
                   <span className="w-8 text-center font-bold" aria-live="polite">{l.quantity}</span>
-                  <button className="stepper-btn" onClick={() => setQuantity(l.key, l.quantity + 1)} aria-label="Plus">+</button>
+                  <button className="stepper-btn" onClick={() => setQuantity(l.key, l.quantity + 1)} aria-label="Ajouter une pizza"><Plus size={16} aria-hidden="true" /></button>
                 </div>
-                <p className="ml-auto font-bold">{formatMoney(l.lineTotalMinor, currency)}</p>
+                <p className="ml-auto text-lg font-extrabold">{formatMoney(l.lineTotalMinor, currency)}</p>
               </div>
             </div>
           </article>
@@ -70,12 +71,10 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
 
       <aside className="card h-fit space-y-3 p-5 lg:sticky lg:top-24" aria-label="Récapitulatif">
         <div className="flex justify-between text-lg"><span>Sous-total des produits</span><strong>{formatMoney(data?.subtotalMinor ?? 0, currency)}</strong></div>
-        <p className="text-sm text-ink-soft">Livraison : les frais sont indiqués à l'étape suivante si votre zone est tarifée, sinon ils sont à confirmer avec la pizzeria. Aucun paiement n'est effectué sur ce site.</p>
-        {!canOrder && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-bold text-white">{blockedReason}</p>}
-        <Link href="/commander" aria-disabled={blocked} className={`btn btn-primary btn-lg ${blocked ? "pointer-events-none opacity-55" : ""}`} tabIndex={blocked ? -1 : 0}>
-          Continuer vers la livraison
-        </Link>
-        <Link href="/menu" className="block text-center text-sm font-bold underline">Ajouter d'autres pizzas</Link>
+        <p className="text-sm text-ink-soft">Frais de livraison : indiqués à l'étape suivante si votre zone est tarifée, sinon à confirmer selon votre adresse. Aucun paiement n'est effectué sur le site.</p>
+        {!canOrder && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-semibold text-white">{blockedReason}</p>}
+        <Link href="/commander" aria-disabled={blocked} className={`btn btn-primary btn-lg ${blocked ? "pointer-events-none opacity-50" : ""}`} tabIndex={blocked ? -1 : 0}>Renseigner ma livraison</Link>
+        <Link href="/menu" className="flex min-h-11 items-center justify-center text-sm font-bold underline">Ajouter d'autres pizzas</Link>
       </aside>
     </div>
   );

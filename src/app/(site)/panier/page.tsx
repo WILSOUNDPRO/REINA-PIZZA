@@ -10,7 +10,7 @@ export default async function CartPage() {
   const reason = s.orders_paused ? s.pause_message || "Les commandes sont temporairement suspendues." : !s.currency ? "La devise du restaurant n'est pas encore configurée." : undefined;
   return (
     <div className="mx-auto max-w-5xl px-4 pt-8">
-      <h1 className="mb-6 text-4xl font-extrabold">Votre panier</h1>
+      <h1 className="mb-6 text-3xl font-extrabold sm:text-4xl">Votre panier</h1>
       <CartView currency={s.currency} canOrder={!reason} blockedReason={reason} />
     </div>
   );

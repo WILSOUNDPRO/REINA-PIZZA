@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Copy, Check, MessageCircle, Phone } from "lucide-react";
 
 // Le bouton ouvre un BROUILLON WhatsApp : le client doit l'envoyer lui-même. Rien n'est envoyé automatiquement.
 export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: string; message: string; phoneHref: string }) {
@@ -18,11 +19,11 @@ export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: stri
   }
   return (
     <div className="no-print space-y-3">
-      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer">Contacter Reina Pizza pour confirmer la livraison</a>
-      <p className="text-xs text-ink-soft">En continuant, vous préparez un message WhatsApp contenant votre commande et vos coordonnées de livraison à destination de Reina Pizza.</p>
+      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={20} aria-hidden="true" />Confirmer la livraison sur WhatsApp</a>
+      <p className="text-xs text-ink-soft">Le message WhatsApp contiendra votre commande et vos coordonnées de livraison pour Reina Pizza.</p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <button type="button" className="btn btn-ghost flex-1" onClick={copy}>{state === "ok" ? "Message copié ✓" : "Copier le message"}</button>
-        <a className="btn btn-ghost flex-1" href={phoneHref}>📞 Appeler la pizzeria</a>
+        <button type="button" className="btn btn-ghost flex-1" onClick={copy}>{state === "ok" ? <><Check size={18} aria-hidden="true" />Message copié</> : <><Copy size={18} aria-hidden="true" />Copier le message</>}</button>
+        <a className="btn btn-ghost flex-1" href={phoneHref}><Phone size={18} aria-hidden="true" />Appeler Reina Pizza</a>
       </div>
       <details open={state === "fail"} className="text-sm">
         <summary className="cursor-pointer font-bold">Voir le message</summary>

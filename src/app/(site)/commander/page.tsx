@@ -14,7 +14,7 @@ export default async function CheckoutPage() {
   const blocked = s.orders_paused ? s.pause_message || "Les commandes sont temporairement suspendues." : !s.currency ? "La devise du restaurant n'est pas encore configurée : les commandes sont indisponibles." : null;
   return (
     <div className="mx-auto max-w-5xl px-4 pt-8">
-      <h1 className="mb-6 text-4xl font-extrabold">Livraison</h1>
+      <h1 className="mb-6 text-3xl font-extrabold sm:text-4xl">Votre livraison</h1>
       {blocked || !s.currency ? (
         <div role="alert" className="card p-6">
           <p className="font-bold">{blocked}</p>

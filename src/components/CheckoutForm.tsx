@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "./CartProvider";
@@ -29,6 +30,15 @@ function Field({ id, label, error, hint, children, optional }: { id: string; lab
       {hint && !error && <p id={`${id}-hint`} className="mt-1 text-xs text-ink-soft">{hint}</p>}
       {error && <p id={`${id}-err`} role="alert" className="mt-1 text-sm font-bold text-tomato">{error}</p>}
     </div>
+  );
+}
+
+function Section({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="card space-y-4 p-5">
+      <legend className="float-left mb-1 flex w-full items-center gap-2 text-xl font-extrabold"><span className="grid h-7 w-7 place-items-center rounded-full bg-tomato text-sm text-white" aria-hidden="true">{n}</span>{title}</legend>
+      <div className="clear-both space-y-4">{children}</div>
+    </fieldset>
   );
 }
 
@@ -135,53 +145,59 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
 
   const err = (k: string) => errors[`customer.${k}`];
   const a = (k: string) => ({ id: `f-${k}`, name: k, "aria-invalid": err(k) ? (true as const) : undefined, "aria-describedby": err(k) ? `f-${k}-err` : undefined, className: "field" });
-
   return (
     <form ref={formRef} onSubmit={onSubmit} noValidate className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-      <div className="space-y-6">
-        <fieldset className="card space-y-3 p-5" id="f-delivery" tabIndex={-1}>
-          <legend className="px-1 font-display text-2xl font-bold">1. Livraison</legend>
-          {zones.map((z) => (
-            <label key={z.id} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border-2 p-3 ${mode === "zone" && zoneId === z.id ? "border-basil bg-white" : "border-line"}`}>
-              <input type="radio" name="zone" className="h-5 w-5 accent-[#2d6a3e]" checked={mode === "zone" && zoneId === z.id} onChange={() => { setMode("zone"); setZoneId(z.id); }} />
-              <span className="flex-1">
-                <strong>{z.name}</strong>
-                {z.commune && <span className="block text-sm text-ink-soft">{z.commune}</span>}
-                {z.is_demo && <span className="badge bg-cream-2 text-ink-soft">Zone de démonstration</span>}
-              </span>
-              <span className="font-bold">{formatMoney(z.fee_minor, currency)}</span>
-            </label>
-          ))}
-          <label className={`flex min-h-14 cursor-pointer items-start gap-3 rounded-2xl border-2 p-3 ${mode === "quote" ? "border-basil bg-white" : "border-line"}`}>
-            <input type="radio" name="zone" className="mt-1 h-5 w-5 accent-[#2d6a3e]" checked={mode === "quote"} onChange={() => setMode("quote")} />
-            <span className="flex-1">
-              <strong>{zones.length ? "Mon adresse n'est pas dans la liste" : "Frais de livraison à confirmer"}</strong>
-              <span className="block text-sm text-ink-soft">Frais de livraison à confirmer avec la pizzeria selon votre adresse. Vous pouvez quand même enregistrer votre commande.</span>
-            </span>
-          </label>
-          {errors.zoneId && <p role="alert" className="text-sm font-bold text-tomato">{errors.zoneId}</p>}
-          {errors.deliveryMode && <p role="alert" className="text-sm font-bold text-tomato">{errors.deliveryMode}</p>}
-        </fieldset>
-
-        <fieldset className="card space-y-4 p-5">
-          <legend className="px-1 font-display text-2xl font-bold">2. Vos coordonnées</legend>
+      <div className="space-y-5">
+        <Section n={1} title="Coordonnées">
           <Field id="f-fullName" label="Nom complet" error={err("fullName")}><input {...a("fullName")} autoComplete="name" /></Field>
           <Field id="f-phone" label="Téléphone joignable" error={err("phone")} hint="Ex. 4646-1212 ou +509 4646-1212">
             <input {...a("phone")} type="tel" inputMode="tel" autoComplete="tel" />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field id="f-commune" label="Commune" error={err("commune")}><input {...a("commune")} autoComplete="address-level2" /></Field>
-            <Field id="f-quarter" label="Quartier ou zone" error={err("quarter")}><input {...a("quarter")} /></Field>
+            <Field id="f-whatsapp" label="Numéro WhatsApp différent" optional error={err("whatsapp")}><input {...a("whatsapp")} type="tel" inputMode="tel" /></Field>
+            <Field id="f-email" label="E-mail" optional error={err("email")} hint={emailEnabled ? "Pour recevoir la confirmation par e-mail." : undefined}>
+              <input {...a("email")} type="email" inputMode="email" autoComplete="email" />
+            </Field>
           </div>
-          <Field id="f-address" label="Adresse précise" error={err("address")} hint="Rue, impasse, numéro de maison si disponible">
-            <input {...a("address")} autoComplete="street-address" />
-          </Field>
-          <Field id="f-landmark" label="Point de repère" error={err("landmark")} hint="Ex. en face de l'église, près de la pharmacie…"><input {...a("landmark")} /></Field>
+        </Section>
+
+        <fieldset className="card space-y-4 p-5" id="f-delivery" tabIndex={-1}>
+          <legend className="float-left mb-1 flex w-full items-center gap-2 text-xl font-extrabold"><span className="grid h-7 w-7 place-items-center rounded-full bg-tomato text-sm text-white" aria-hidden="true">2</span>Adresse de livraison</legend>
+          <div className="clear-both space-y-4">
+            <div className="space-y-2" role="radiogroup" aria-label="Zone de livraison">
+              {zones.map((z) => (
+                <label key={z.id} className={`flex min-h-14 cursor-pointer items-center gap-3 rounded-xl border p-3 ${mode === "zone" && zoneId === z.id ? "border-ink bg-cream" : "border-line"}`}>
+                  <input type="radio" name="zone" className="h-5 w-5 accent-[#921f24]" checked={mode === "zone" && zoneId === z.id} onChange={() => { setMode("zone"); setZoneId(z.id); }} />
+                  <span className="flex-1"><strong>{z.name}</strong>{z.commune && <span className="block text-sm text-ink-soft">{z.commune}</span>}</span>
+                  <span className="font-bold">{formatMoney(z.fee_minor, currency)}</span>
+                </label>
+              ))}
+              <label className={`flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-3 ${mode === "quote" ? "border-ink bg-cream" : "border-line"}`}>
+                <input type="radio" name="zone" className="mt-1 h-5 w-5 accent-[#921f24]" checked={mode === "quote"} onChange={() => setMode("quote")} />
+                <span className="flex-1"><strong>{zones.length ? "Mon adresse n'est pas dans la liste" : "Frais de livraison à confirmer"}</strong><span className="block text-sm text-ink-soft">Frais de livraison à confirmer selon votre adresse. Vous pouvez quand même enregistrer votre commande.</span></span>
+              </label>
+              {errors.zoneId && <p role="alert" className="text-sm font-bold text-tomato">{errors.zoneId}</p>}
+              {errors.deliveryMode && <p role="alert" className="text-sm font-bold text-tomato">{errors.deliveryMode}</p>}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field id="f-commune" label="Commune" error={err("commune")}><input {...a("commune")} autoComplete="address-level2" /></Field>
+              <Field id="f-quarter" label="Quartier ou zone" error={err("quarter")}><input {...a("quarter")} /></Field>
+            </div>
+            <Field id="f-address" label="Adresse précise" error={err("address")} hint="Rue, impasse, numéro de maison si disponible"><input {...a("address")} autoComplete="street-address" /></Field>
+            <Field id="f-landmark" label="Point de repère" error={err("landmark")} hint="Ex. en face de l'église, près de la pharmacie…"><input {...a("landmark")} /></Field>
+            <Field id="f-gps" label="Localisation GPS ou lien" optional error={err("gps")} hint="Latitude, longitude ou lien Google Maps / Waze. La position n'est demandée que si vous touchez le bouton.">
+              <input {...a("gps")} />
+            </Field>
+            <div className="flex flex-wrap items-center gap-3">
+              <button type="button" className="btn btn-ghost text-sm" onClick={fillMyPosition}><MapPin size={18} aria-hidden="true" />Utiliser ma position</button>
+              {gpsMsg && <p className="text-sm text-ink-soft" role="status">{gpsMsg}</p>}
+            </div>
+            <Field id="f-deliveryInstructions" label="Instructions pour le livreur" optional error={err("deliveryInstructions")}><textarea {...a("deliveryInstructions")} rows={2} /></Field>
+          </div>
         </fieldset>
 
-        <fieldset className="card space-y-4 p-5">
-          <legend className="px-1 font-display text-2xl font-bold">3. Paiement</legend>
-          <p className="rounded-xl bg-cream-2 p-3 text-sm"><strong>Le paiement sera organisé directement avec la pizzeria. Aucun paiement n'est effectué sur ce site.</strong> Ne communiquez jamais de numéro de carte, de code PIN, de mot de passe ou de code de validation.</p>
+        <Section n={3} title="Moyen de paiement souhaité">
+          <p className="rounded-xl bg-cream-2 p-3 text-sm"><strong>Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza.</strong> Ne communiquez jamais de numéro de carte, de code PIN, de mot de passe ou de code de validation.</p>
           <Field id="f-paymentMethodId" label="Moyen de paiement souhaité" error={errors.paymentMethodId}>
             <select id="f-paymentMethodId" name="paymentMethodId" className="field" defaultValue={paymentMethods.length === 1 ? paymentMethods[0].id : ""} aria-invalid={errors.paymentMethodId ? true : undefined}>
               {paymentMethods.length !== 1 && <option value="" disabled>Choisir…</option>}
@@ -191,32 +207,17 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
           <Field id="f-paymentMethodNote" label="Précisez le moyen dont vous disposez" optional error={errors.paymentMethodNote} hint="Ex. : espèces à la livraison, ou le service mobile que vous utilisez.">
             <input id="f-paymentMethodNote" name="paymentMethodNote" maxLength={200} className="field" />
           </Field>
-        </fieldset>
+        </Section>
 
-        <details className="card p-5">
-          <summary className="cursor-pointer font-display text-xl font-bold">4. Informations facultatives</summary>
-          <div className="mt-4 space-y-4">
-            <Field id="f-whatsapp" label="Numéro WhatsApp différent" optional error={err("whatsapp")}><input {...a("whatsapp")} type="tel" inputMode="tel" /></Field>
-            <Field id="f-email" label="E-mail" optional error={err("email")} hint={emailEnabled ? "Pour recevoir la confirmation par e-mail." : "Inutile pour commander."}>
-              <input {...a("email")} type="email" inputMode="email" autoComplete="email" />
-            </Field>
-            <Field id="f-gps" label="Position GPS ou lien de localisation" optional error={err("gps")} hint="Latitude, longitude ou lien Google Maps / Waze.">
-              <input {...a("gps")} />
-            </Field>
-            <button type="button" className="btn btn-ghost !min-h-11 text-sm" onClick={fillMyPosition}>📍 Utiliser ma position</button>
-            {gpsMsg && <p className="text-sm text-ink-soft" role="status">{gpsMsg}</p>}
-            <Field id="f-deliveryInstructions" label="Instructions pour le livreur" optional error={err("deliveryInstructions")}>
-              <textarea {...a("deliveryInstructions")} rows={2} />
-            </Field>
-            <Field id="f-notes" label="Remarques sur la commande" optional error={err("notes")}><textarea {...a("notes")} rows={2} /></Field>
-          </div>
-        </details>
+        <Section n={4} title="Remarques">
+          <Field id="f-notes" label="Remarques sur la commande" optional error={err("notes")}><textarea {...a("notes")} rows={2} /></Field>
+        </Section>
         {/* Champ piège pour les robots : invisible, hors tabulation. */}
         <div aria-hidden="true" className="absolute -left-[9999px]"><label>Site web<input name="website" tabIndex={-1} autoComplete="off" /></label></div>
       </div>
 
       <aside className="card h-fit space-y-3 p-5 lg:sticky lg:top-24" aria-label="Récapitulatif de commande">
-        <h2 className="font-display text-2xl font-bold">Récapitulatif</h2>
+        <h2 className="text-xl font-extrabold">Récapitulatif</h2>
         <ul className="space-y-1 text-sm">
           {data?.lines.map((l) => (
             <li key={l.key} className="flex justify-between gap-2"><span>{l.quantity} × {l.productName} ({l.size})</span><span className="font-semibold">{formatMoney(l.lineTotalMinor, currency)}</span></li>
@@ -230,16 +231,16 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
               <div className="flex justify-between border-t border-line pt-2 text-lg"><span>Total</span><strong>{formatMoney(subtotal + fee, currency)}</strong></div>
             </>
           ) : (
-            <p className="pt-1 text-sm font-bold">{mode === "zone" ? "Choisissez une zone pour voir les frais." : "Frais de livraison à confirmer avec la pizzeria selon votre adresse."}</p>
+            <p className="pt-1 text-sm font-semibold">{mode === "zone" ? "Choisissez une zone pour voir les frais." : "Frais de livraison à confirmer selon votre adresse."}</p>
           )}
         </div>
-        {mode === "quote" && <p className="rounded-xl bg-cream-2 p-3 text-sm">Le montant ci-dessus est le sous-total des produits, pas un total final : la livraison n'est pas encore comptée.</p>}
+        {mode === "quote" && <p className="rounded-xl bg-cream-2 p-3 text-sm">Ce montant est le sous-total des pizzas, pas un total final : la livraison n'est pas encore comptée.</p>}
         {hasProblems && <p role="alert" className="text-sm font-bold text-tomato">Certains articles ne sont plus disponibles. <Link className="underline" href="/panier">Vérifier le panier</Link></p>}
-        {formError && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-bold text-white">{formError}</p>}
-        <button type="submit" className="btn btn-primary btn-lg" disabled={pending || loading || hasProblems || !ready}>
+        {formError && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-semibold text-white">{formError}</p>}
+        <button type="submit" className="btn btn-primary btn-lg" disabled={pending || loading || hasProblems || !ready} aria-busy={pending}>
           {pending ? "Enregistrement…" : "Enregistrer ma commande"}
         </button>
-        <p className="text-center text-xs text-ink-soft">Ensuite, vous contactez la pizzeria sur WhatsApp pour confirmer la livraison et le paiement.</p>
+        <p className="text-center text-xs text-ink-soft">Ensuite, vous confirmez la livraison et le paiement avec Reina Pizza sur WhatsApp.</p>
       </aside>
     </form>
   );

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Check } from "lucide-react";
 import { getSql } from "@/server/db";
 import { getOrderByToken } from "@/server/orders";
 import { getSettings } from "@/server/settings";
@@ -11,6 +12,7 @@ import { locationHref } from "@/lib/location";
 import { buildOrderMessage, waLink } from "@/lib/whatsapp";
 import { PAYMENT_STATUS_LABELS } from "@/lib/labels";
 import { OrderMessageActions } from "@/components/OrderMessageActions";
+import { Logo } from "@/components/Logo";
 import { PrintButton } from "@/components/PrintButton";
 import { FeeBadge, OrderStatusBadge, PaymentStatusBadge } from "@/components/StatusBadge";
 
@@ -35,10 +37,11 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-4 pt-8">
+      <div className="hidden items-center justify-between print:flex"><Logo className="h-14 w-auto" /><p className="text-sm">Delmas 33, rue Charbonnier, impasse Costo, Haïti<br />{settings.phone}</p></div>
       <header className="space-y-2">
-        <p className="text-sm font-bold uppercase tracking-wide text-basil">✓ Commande enregistrée</p>
-        <h1 className="text-4xl font-extrabold">Votre commande a été enregistrée</h1>
-        <p className="text-lg">Référence <strong className="whitespace-nowrap font-display text-2xl text-tomato">{o.ref}</strong></p>
+        <p className="inline-flex items-center gap-1 text-sm font-bold uppercase tracking-wide text-basil"><Check size={16} aria-hidden="true" />Commande enregistrée</p>
+        <h1 className="text-3xl font-extrabold sm:text-4xl">Votre commande a été enregistrée</h1>
+        <p className="text-lg">Référence <strong className="whitespace-nowrap text-2xl text-tomato">{o.ref}</strong></p>
         <p className="text-sm text-ink-soft">Enregistrée le {formatDateTime(o.created_at)} (heure de Port-au-Prince). Conservez cette page : le lien donne accès à votre commande.</p>
         <div className="flex flex-wrap gap-2">
           <OrderStatusBadge status={o.order_status} />
@@ -48,7 +51,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
         {o.order_status === "to_confirm" && <p role="status" className="rounded-2xl bg-amber-100 p-4 font-bold">En attente de confirmation par la pizzeria.</p>}
       </header>
 
-      <section className="no-print card space-y-3 border-2 !border-basil p-5" aria-labelledby="suite">
+      <section className="no-print card space-y-3 !border-basil p-5" aria-labelledby="suite">
         <h2 id="suite" className="text-2xl font-bold">Prochaine étape</h2>
         <p className="text-sm">La pizzeria a reçu votre commande dans son espace de gestion, même si vous n'ouvrez pas WhatsApp. Pour confirmer la livraison, les frais éventuels et le paiement, contactez-la. <strong>Le bouton ouvre un brouillon de message : c'est à vous de l'envoyer.</strong></p>
         <OrderMessageActions waUrl={waUrl} message={message} phoneHref={`tel:${phone}`} />
@@ -73,7 +76,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
           <div className="flex justify-between"><dt>Livraison{o.delivery_zone_name ? ` (${o.delivery_zone_name})` : ""}</dt><dd>{o.delivery_fee_minor === null ? "À confirmer selon l'adresse" : money(o.delivery_fee_minor)}</dd></div>
           {feeKnown && <div className="flex justify-between text-xl font-extrabold"><dt>Total</dt><dd>{money(o.total_minor!)}</dd></div>}
         </dl>
-        {!feeKnown && <p className="mt-2 text-sm text-ink-soft">Frais de livraison à confirmer avec la pizzeria selon votre adresse. Le montant des produits ci-dessus n'est pas un total final.</p>}
+        {!feeKnown && <p className="mt-2 text-sm text-ink-soft">Frais de livraison à confirmer selon votre adresse. Le montant des pizzas ci-dessus n'est pas un total final.</p>}
       </section>
 
       <section className="card p-5" aria-labelledby="livraison">
@@ -100,7 +103,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
           <div className="flex justify-between gap-3"><dt>Statut</dt><dd className="text-right font-bold">{PAYMENT_STATUS_LABELS[o.payment_status]}</dd></div>
           {confirmedPay && o.paid_at && <div className="flex justify-between gap-3"><dt>Confirmé le</dt><dd>{formatDateTime(o.paid_at)}</dd></div>}
         </dl>
-        <p className="mt-2 text-xs text-ink-soft">Le paiement est organisé directement avec la pizzeria. Aucun paiement n'est effectué sur ce site. Seule la pizzeria peut confirmer qu'un paiement a été reçu.</p>
+        <p className="mt-2 text-xs text-ink-soft">Le paiement est organisé directement avec la pizzeria. Aucun paiement n'est effectué sur le site. Seule Reina Pizza peut confirmer qu'un paiement a été reçu.</p>
       </section>
 
       <div className="no-print"><PrintButton label="Imprimer la confirmation de commande" /></div>

@@ -60,8 +60,6 @@ export function buildOrderMessage(o: MessageOrder, items: MessageItem[]): string
   L.push("Paiement à organiser directement avec la pizzeria.");
   if (o.notes) L.push("", `Remarques : ${o.notes}`);
 
-  L.push("", feeKnown
-    ? "Pouvez-vous confirmer la disponibilité et le délai estimé, s'il vous plaît ?"
-    : "Pouvez-vous confirmer la disponibilité, les frais de livraison et le délai estimé, s'il vous plaît ?");
+  L.push("", "Merci de confirmer la disponibilité, les frais de livraison s'ils restent à définir et le délai estimé.");
   return L.join("\n");
 }
