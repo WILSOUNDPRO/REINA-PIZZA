@@ -49,6 +49,7 @@ http
       refresh.delete(b.refresh_token);
       return json(res, 200, issue(email));
     }
+    if (url.pathname === "/auth/v1/settings") return json(res, 200, { disable_signup: true });
     if (url.pathname === "/auth/v1/user") {
       const s = sessions.get(bearer);
       if (!s || s.exp < Date.now()) return json(res, 401, { error: "invalid token" });

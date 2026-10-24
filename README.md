@@ -28,6 +28,8 @@ insert into admin_users(email) values ('admin@reina.test');
 ```
 
 ## Configurer Supabase (production)
+Guide pas à pas : [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) (script SQL unique `supabase/setup.sql`, variables Vercel, diagnostic `/api/health`).
+
 1. Créer le projet ; exécuter `supabase/migrations/*.sql` (CLI `supabase db push` ou éditeur SQL). Le bucket public `menu-images` est créé par la migration.
 2. Auth → **désactiver les inscriptions publiques**, créer le compte admin (e-mail confirmé), puis `insert into admin_users(email) values ('<e-mail en minuscules>');`.
 3. Renseigner `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SITE_URL`, `RATE_LIMIT_SALT` côté hébergeur. `DATABASE_URL` doit utiliser un rôle contournant la RLS (rôle `postgres` de Supabase).

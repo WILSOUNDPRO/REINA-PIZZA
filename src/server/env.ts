@@ -10,8 +10,9 @@ export function required(name: string): string {
 export const env = {
   databaseUrl: () => required("DATABASE_URL"),
   siteUrl: () => (process.env.SITE_URL ?? "").replace(/\/$/, ""),
-  supabaseUrl: () => (process.env.SUPABASE_URL ?? "").replace(/\/$/, ""),
-  supabaseAnonKey: () => process.env.SUPABASE_ANON_KEY ?? "",
+  // Les variables préfixées NEXT_PUBLIC_ (convention courante sur Vercel/Supabase) sont acceptées en secours.
+  supabaseUrl: () => (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, ""),
+  supabaseAnonKey: () => process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
   supabaseServiceKey: () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   rateLimitSalt: () => process.env.RATE_LIMIT_SALT ?? "dev-only-salt",
   // Version 1 : aucun paiement en ligne. L'architecture est conservée mais désactivée tant que ce drapeau n'est pas "true".

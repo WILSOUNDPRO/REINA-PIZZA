@@ -11,11 +11,11 @@ export async function middleware(req: NextRequest) {
 
   if (!req.cookies.get(ACCESS)?.value) {
     const rt = req.cookies.get(REFRESH)?.value;
-    const base = (process.env.SUPABASE_URL ?? "").replace(/\/$/, "");
+    const base = (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
     if (rt && base) {
       const r = await fetch(`${base}/auth/v1/token?grant_type=refresh_token`, {
         method: "POST",
-        headers: { apikey: process.env.SUPABASE_ANON_KEY ?? "", "Content-Type": "application/json" },
+        headers: { apikey: process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "", "Content-Type": "application/json" },
         body: JSON.stringify({ refresh_token: rt }),
       }).catch(() => null);
       if (r?.ok) {
