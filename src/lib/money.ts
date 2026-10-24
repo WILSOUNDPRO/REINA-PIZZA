@@ -3,7 +3,8 @@ import type { Currency } from "./constants";
 // Montants en unités mineures (centimes). La devise est toujours affichée en code (HTG / USD)
 // pour éviter toute ambiguïté (« $ » peut désigner le dollar haïtien ou américain).
 export function formatMoney(minor: number, currency: Currency | null | undefined): string {
-  const n = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100);
+  const d = minor % 100 === 0 ? 0 : 2; // « 1 500 HTG », « 1 250,50 HTG »
+  const n = new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }).format(minor / 100).replace(/\u202f/g, "\u00a0"); // espace insécable ordinaire : plus lisible que l'espace fine
   return currency ? `${n} ${currency}` : `${n} (devise à confirmer)`;
 }
 

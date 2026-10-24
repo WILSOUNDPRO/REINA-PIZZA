@@ -105,6 +105,8 @@ export const checkoutSchema = z
     expectedTotalMinor: z.number().int().min(0).optional(),
     idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,100}$/),
     website: z.string().optional(), // honeypot : doit rester vide
+    paymentMethodId: z.guid({ error: "Choisissez le moyen de paiement souhaité." }),
+    paymentMethodNote: optionalText("La précision sur le moyen de paiement", 200),
     customer: customerSchema,
   })
   .superRefine((v, ctx) => {

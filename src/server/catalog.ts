@@ -35,3 +35,7 @@ export async function getActiveZones(sql: Sql) {
   return sql<{ id: string; name: string; commune: string | null; fee_minor: number; is_demo: boolean }[]>`
     select id, name, commune, fee_minor, is_demo from delivery_zones where active order by position, name`;
 }
+
+export async function getEnabledPaymentMethods(sql: Sql) {
+  return sql<{ id: string; label: string }[]>`select id, label from payment_methods where enabled order by position, label`;
+}

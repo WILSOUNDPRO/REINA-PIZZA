@@ -15,7 +15,7 @@ export default async function Home() {
             La pizza,<br /><span className="text-tomato">à toute heure.</span>
           </h1>
           <p className="mt-4 max-w-md text-lg text-ink-soft">
-            Reina Pizza prépare vos pizzas à Delmas et les livre chez vous. Choisissez votre taille, indiquez votre adresse, payez sur le site.
+            Reina Pizza prépare vos pizzas à Delmas et les livre chez vous. Choisissez votre taille, indiquez votre adresse : la pizzeria confirme avec vous et organise le paiement.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Link href="/menu" className="btn btn-primary btn-lg sm:!w-auto sm:px-10">Commander</Link>
@@ -25,7 +25,7 @@ export default async function Home() {
             <p role="alert" className="mt-4 rounded-2xl bg-tomato p-3 font-bold text-white">{s.pause_message || "Les commandes sont temporairement suspendues."}</p>
           )}
         </div>
-        <div className="mx-auto w-full max-w-sm md:max-w-md">
+        <div className="mx-auto w-full max-w-sm overflow-hidden md:max-w-md">
           <PizzaMark className="drop-shadow-xl" spin />
         </div>
       </section>
@@ -36,7 +36,7 @@ export default async function Home() {
           {[
             ["1", "Choisissez", "Pizzas, tailles et suppléments selon la carte."],
             ["2", "Indiquez où livrer", "Votre zone, votre adresse et un point de repère."],
-            ["3", "Payez le total", "Vous voyez le total complet, livraison comprise, avant de payer."],
+            ["3", "Confirmez sur WhatsApp", "Votre commande est enregistrée, puis vous confirmez livraison et paiement avec la pizzeria."],
           ].map(([n, t, d]) => (
             <li key={n} className="card flex gap-4 p-5">
               <span className="font-display text-4xl font-black text-tomato">{n}</span>
@@ -51,7 +51,7 @@ export default async function Home() {
         <div className="card p-5">
           <h3 className="text-xl font-bold text-basil">Livraison</h3>
           <p className="mt-2 text-ink-soft">
-            Les frais varient selon la destination. Si votre zone est couverte, le total complet s'affiche tout de suite. Sinon, vous envoyez votre demande : nous fixons les frais et vous recevez un lien pour voir le total, l'accepter et payer.
+            Les frais varient selon la destination. Si votre zone est tarifée, les frais et le total s'affichent tout de suite. Sinon, vous pouvez quand même commander : les frais sont à confirmer avec la pizzeria selon votre adresse. Aucun paiement n'est effectué sur le site.
           </p>
         </div>
         <div className="card p-5">

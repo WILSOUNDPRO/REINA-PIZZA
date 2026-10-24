@@ -4,14 +4,13 @@ import { getSql } from "@/server/db";
 import { acknowledgeOrder, getOrderById } from "@/server/orders";
 import { getSettings } from "@/server/settings";
 import { env } from "@/server/env";
-import { payState } from "@/lib/orderState";
-import { allowedNextStatuses, EVENT_LABELS, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, type OrderStatus, type PaymentStatus } from "@/lib/labels";
+import { allowedNextStatuses, EVENT_LABELS, MANUAL_PAYMENT_STATUSES, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, type OrderStatus, type PaymentStatus } from "@/lib/labels";
 import { formatMoney, minorToInput } from "@/lib/money";
 import { formatDateTime } from "@/lib/time";
 import { formatPhoneDisplay, phoneToWaDigits } from "@/lib/phone";
 import { locationHref } from "@/lib/location";
-import { adminToCustomerMessage, waLink } from "@/lib/whatsapp";
-import { setFeeAction, updateStatusAction } from "../../../actions";
+import { waLink } from "@/lib/whatsapp";
+import { setFeeAction, setPaymentStatusAction, updateStatusAction } from "../../../actions";
 import { Flash } from "@/components/admin/Flash";
 import { CopyButton } from "@/components/admin/CopyButton";
 import { SubmitButton } from "@/components/admin/SubmitButton";
@@ -19,10 +18,11 @@ import { FeeBadge, OrderStatusBadge, PaymentStatusBadge } from "@/components/Sta
 
 function eventText(kind: string, from: string | null, to: string | null, currency: string, meta: Record<string, unknown>) {
   const m = (v: string | null) => (v === null ? "—" : formatMoney(Number(v), currency as "HTG" | "USD"));
+  if (kind === "created") return "Commande enregistrée par le client, en attente de confirmation";
   if (kind === "status") return `${ORDER_STATUS_LABELS[from as OrderStatus] ?? from} → ${ORDER_STATUS_LABELS[to as OrderStatus] ?? to}${meta.refund ? " (aucun remboursement automatique : à traiter manuellement)" : ""}`;
   if (kind === "delivery_fee") return `${m(from)} → ${m(to)}`;
   if (kind === "fee_accepted") return `Total accepté : ${m(to)}`;
-  if (kind === "payment") return `${PAYMENT_STATUS_LABELS[from as PaymentStatus] ?? from ?? "—"} → ${PAYMENT_STATUS_LABELS[to as PaymentStatus] ?? to}${meta.reason ? ` (${meta.reason})` : ""}${meta.action ? ` — ${meta.action}` : ""}`;
+  if (kind === "payment") return `${PAYMENT_STATUS_LABELS[from as PaymentStatus] ?? from ?? "—"} → ${PAYMENT_STATUS_LABELS[to as PaymentStatus] ?? to}${meta.manual ? " (action manuelle)" : ""}${meta.reason ? ` (${meta.reason})` : ""}${meta.action ? ` — ${meta.action}` : ""}`;
   return to ?? "";
 }
 
@@ -38,10 +38,9 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
   const h = await headers();
   const origin = env.siteUrl() || `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host")}`;
   const link = `${origin}/commande/${o.access_token}`;
-  const state = payState(o);
   const money = (n: number) => formatMoney(n, o.currency);
   const customerDigits = phoneToWaDigits(o.customer_whatsapp ?? o.customer_phone);
-  const canSetFee = !["paid", "review"].includes(o.payment_status) && !["cancelled", "delivered"].includes(o.order_status);
+  const canSetFee = !["paid", "review", "confirmed_manually"].includes(o.payment_status) && !["cancelled", "delivered"].includes(o.order_status);
   const next = allowedNextStatuses(o.order_status);
 
   return (
@@ -51,7 +50,7 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
         <h1 className="text-3xl font-extrabold">Commande {o.ref}</h1>
         <p className="text-sm text-ink-soft">Passée le {formatDateTime(o.created_at)} · {o.delivery_mode === "zone" ? `Zone : ${o.delivery_zone_name ?? "—"}` : "Estimation de livraison demandée"}</p>
         <div className="flex flex-wrap gap-2"><OrderStatusBadge status={o.order_status} /><PaymentStatusBadge status={o.payment_status} /><FeeBadge status={o.fee_status} />{o.has_demo_items && <span className="badge bg-cream-2">Contient des produits de démonstration</span>}</div>
-        {o.order_status === "cancelled" && o.payment_status === "paid" && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm font-bold">Commande annulée mais PAYÉE : aucun remboursement n'est effectué automatiquement. Remboursez via le prestataire si nécessaire.</p>}
+        {o.order_status === "cancelled" && ["paid", "confirmed_manually"].includes(o.payment_status) && <p role="alert" className="rounded-xl bg-amber-100 p-3 text-sm font-bold">Commande annulée alors que le paiement est confirmé : aucun remboursement n'est effectué automatiquement. Organisez-le directement avec le client si nécessaire.</p>}
         {o.payment_status === "review" && <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm font-bold">Un paiement a été reçu avec un montant ou un total différent : vérifiez-le auprès du prestataire avant toute action.</p>}
         {payments.some((p) => p.status === "duplicate") && <p role="alert" className="rounded-xl bg-red-100 p-3 text-sm font-bold">Un paiement en double a été détecté : un remboursement manuel est probablement nécessaire.</p>}
       </header>
@@ -67,7 +66,10 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
           {o.gps_location && <p className="text-sm"><a className="underline" href={locationHref(o.gps_location)} target="_blank" rel="noopener noreferrer">📍 {o.gps_location.startsWith("http") ? "Ouvrir la carte" : o.gps_location}</a></p>}
           {o.delivery_instructions && <p className="text-sm"><strong>Instructions :</strong> {o.delivery_instructions}</p>}
           {o.notes && <p className="text-sm"><strong>Remarques :</strong> {o.notes}</p>}
-          <a className="btn btn-basil" target="_blank" rel="noopener noreferrer" href={waLink(customerDigits, `Bonjour, au sujet de votre commande Reina Pizza ${o.ref}.`)}>Contacter le client sur WhatsApp</a>
+          <div className="flex flex-wrap gap-2">
+            <a className="btn btn-ghost" href={`tel:${o.customer_phone}`}>📞 Appeler le client</a>
+            <a className="btn btn-basil" target="_blank" rel="noopener noreferrer" href={waLink(customerDigits, `Bonjour, au sujet de votre commande Reina Pizza ${o.ref}.`)}>Contacter le client sur WhatsApp</a>
+          </div>
         </section>
 
         <section className="card space-y-3 p-5" aria-labelledby="statut">
@@ -89,31 +91,50 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
       </div>
 
       <section className="card space-y-3 p-5" aria-labelledby="frais">
-        <h2 id="frais" className="text-xl font-bold">Frais de livraison et lien client</h2>
+        <h2 id="frais" className="text-xl font-bold">Montants et frais de livraison</h2>
         <dl className="grid gap-1 text-sm sm:grid-cols-3">
-          <div><dt className="font-bold">Sous-total</dt><dd>{money(o.subtotal_minor)}</dd></div>
+          <div><dt className="font-bold">Sous-total des produits</dt><dd>{money(o.subtotal_minor)}</dd></div>
           <div><dt className="font-bold">Livraison</dt><dd>{o.delivery_fee_minor === null ? "À confirmer" : money(o.delivery_fee_minor)}</dd></div>
-          <div><dt className="font-bold">Total</dt><dd className="text-lg font-extrabold">{o.total_minor === null ? "—" : money(o.total_minor)}</dd></div>
+          <div><dt className="font-bold">Total</dt><dd className="text-lg font-extrabold">{o.total_minor === null ? "— (frais à confirmer)" : money(o.total_minor)}</dd></div>
         </dl>
-        {o.total_expires_at && o.payment_status !== "paid" && <p className="text-xs text-ink-soft">Total valable jusqu'au {formatDateTime(o.total_expires_at)}{state === "expired" ? " — EXPIRÉ" : ""}.</p>}
         {canSetFee ? (
           <form action={setFeeAction} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="orderId" value={o.id} />
-            <label className="text-sm font-bold">{o.fee_status === "to_confirm" ? "Fixer les frais de livraison" : "Modifier / renouveler les frais"} ({o.currency})
-              <input name="fee" inputMode="decimal" required defaultValue={minorToInput(o.delivery_fee_minor)} className="field mt-1" placeholder="0,00" />
+            <label className="text-sm font-bold">{o.delivery_fee_minor === null ? "Ajouter les frais de livraison" : "Modifier les frais de livraison"} ({o.currency})
+              <input name="fee" inputMode="decimal" required defaultValue={minorToInput(o.delivery_fee_minor)} className="field mt-1" placeholder="0" />
             </label>
-            <SubmitButton confirm={o.fee_status === "to_confirm" ? undefined : "Le client devra accepter à nouveau le total et toute session de paiement ouverte sera annulée. Continuer ?"}>Enregistrer les frais</SubmitButton>
+            <SubmitButton>Enregistrer les frais</SubmitButton>
           </form>
-        ) : <p className="text-sm text-ink-soft">Le total ne peut plus être modifié.</p>}
+        ) : <p className="text-sm text-ink-soft">Le paiement est confirmé : le total ne peut plus être modifié.</p>}
+        <p className="text-xs text-ink-soft">Communiquez ensuite le total au client par WhatsApp ou téléphone. Le client voit les frais sur sa page de commande.</p>
         <div className="space-y-2 border-t border-line pt-3">
-          <p className="text-sm font-bold">Lien sécurisé de consultation et de paiement</p>
-          <input readOnly value={link} className="field text-xs" aria-label="Lien client" onFocus={undefined} />
-          <div className="flex flex-wrap gap-2">
-            <CopyButton text={link} />
-            <a className="btn btn-basil !min-h-11 text-sm" target="_blank" rel="noopener noreferrer" href={waLink(customerDigits, adminToCustomerMessage(o.ref, link))}>Envoyer par WhatsApp</a>
-          </div>
-          <p className="text-xs text-ink-soft">Toute personne ayant ce lien voit la commande : ne le publiez pas. {state === "await_fee" ? "Fixez d'abord les frais : le client ne peut pas payer avant." : state === "needs_acceptance" ? "Le client doit accepter le total avant de payer." : ""}</p>
+          <p className="text-sm font-bold">Lien de la commande côté client</p>
+          <input readOnly value={link} className="field text-xs" aria-label="Lien client" />
+          <CopyButton text={link} />
+          <p className="text-xs text-ink-soft">Toute personne ayant ce lien voit la commande (coordonnées incluses) : ne le publiez pas.</p>
         </div>
+      </section>
+
+      <section className="card space-y-3 p-5" aria-labelledby="paiement">
+        <h2 id="paiement" className="text-xl font-bold">Paiement (hors site)</h2>
+        <p className="text-sm"><strong>Moyen souhaité :</strong> {o.payment_method ?? "—"}{o.payment_method_note ? ` — ${o.payment_method_note}` : ""}</p>
+        <p className="text-sm"><strong>Statut :</strong> {PAYMENT_STATUS_LABELS[o.payment_status]}{o.payment_confirmed_by && o.paid_at ? ` — confirmé par ${o.payment_confirmed_by} le ${formatDateTime(o.paid_at)}` : ""}</p>
+        {["paid", "review"].includes(o.payment_status) ? (
+          <p className="text-sm text-ink-soft">Cette commande vient de l'ancien paiement en ligne : son statut ne se modifie pas ici.</p>
+        ) : (
+          <form action={setPaymentStatusAction} className="space-y-3">
+            <input type="hidden" name="orderId" value={o.id} />
+            <label className="block text-sm font-bold">Nouveau statut de paiement
+              <select name="status" className="field mt-1" defaultValue="">
+                <option value="" disabled>Choisir…</option>
+                {MANUAL_PAYMENT_STATUSES.filter((x) => x !== o.payment_status).map((x) => <option key={x} value={x}>{PAYMENT_STATUS_LABELS[x]}</option>)}
+              </select>
+            </label>
+            <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="confirmReceived" className="mt-1 h-5 w-5" /> Je confirme avoir réellement reçu le paiement (requis pour « Confirmé manuellement » ; l'action sera journalisée à mon nom).</label>
+            <SubmitButton>Mettre à jour le paiement</SubmitButton>
+          </form>
+        )}
+        <p className="text-xs text-ink-soft">Le statut de paiement ne change jamais automatiquement : ni l'ouverture de WhatsApp, ni la livraison, ni une déclaration du client ne le confirment.</p>
       </section>
 
       <section className="card p-5" aria-labelledby="articles">

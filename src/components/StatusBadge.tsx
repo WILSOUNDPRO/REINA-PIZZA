@@ -9,8 +9,10 @@ const orderTone: Record<OrderStatus, string> = {
   cancelled: "bg-stone-200 text-stone-700",
 };
 const payTone: Record<PaymentStatus, string> = {
-  unpaid: "bg-stone-200 text-stone-800",
+  to_arrange: "bg-stone-200 text-stone-800",
   pending: "bg-amber-100 text-amber-900",
+  confirmed_manually: "bg-green-100 text-green-900",
+  unpaid: "bg-stone-200 text-stone-800",
   paid: "bg-green-100 text-green-900",
   failed: "bg-red-100 text-red-900",
   cancelled: "bg-stone-200 text-stone-700",
@@ -24,6 +26,6 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
   return <span className={`badge ${payTone[status]}`}>Paiement : {PAYMENT_STATUS_LABELS[status]}</span>;
 }
 export function FeeBadge({ status }: { status: FeeStatus }) {
-  if (status === "accepted") return null;
+  if (status !== "to_confirm") return null;
   return <span className="badge bg-amber-200 text-amber-950">{FEE_STATUS_LABELS[status]}</span>;
 }

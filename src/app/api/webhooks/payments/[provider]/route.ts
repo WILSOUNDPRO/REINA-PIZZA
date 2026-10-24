@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSql } from "@/server/db";
-import { getProvider } from "@/server/payments/index";
+import { activeProvider } from "@/server/payments/index";
 import { InvalidWebhookError } from "@/server/payments/types";
 import { applyWebhookEvent } from "@/server/payments";
 import { log } from "@/server/logger";
@@ -9,8 +9,8 @@ import { log } from "@/server/logger";
 // Une simple redirection du navigateur ne change jamais le statut d'une commande.
 export async function POST(req: Request, ctx: { params: Promise<{ provider: string }> }) {
   const { provider: id } = await ctx.params;
-  const provider = getProvider(id);
-  if (!provider || !provider.isConfigured()) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
+  const provider = activeProvider();
+  if (!provider || provider.id !== id) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
 
   const raw = await req.text();
   if (raw.length > 100_000) return NextResponse.json({ error: "too large" }, { status: 413 });

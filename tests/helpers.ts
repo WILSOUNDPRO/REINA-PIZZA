@@ -6,6 +6,8 @@ import { getSql } from "@/server/db";
 
 export const sql = getSql();
 
+export let METHOD_ID = "";
+
 export const IDS = {
   cat: "11111111-1111-1111-1111-111111111111",
   pizzaA: "22222222-2222-2222-2222-222222222221",
@@ -17,6 +19,9 @@ export const IDS = {
 /** Base de test vierge avec un catalogue et une zone de TEST (pas de vraies données). */
 export async function resetDb(opts: { demo?: boolean } = {}) {
   await sql`truncate orders, payments, payment_events, rate_limits, order_events, order_items, products, product_sizes, categories, extras, delivery_zones restart identity cascade`;
+  await sql`delete from payment_methods`;
+  const [m] = await sql`insert into payment_methods (label) values ('À convenir avec la pizzeria') returning id`;
+  METHOD_ID = m.id;
   await sql`update settings set currency = 'HTG', orders_paused = false, pause_message = null, proposal_ttl_hours = 24, payment_ttl_minutes = 30`;
   const demo = opts.demo ?? false;
   await sql`insert into categories (id, name) values (${IDS.cat}, 'Test')`;
@@ -36,6 +41,7 @@ export function checkout(over: Partial<Record<string, unknown>> = {}): CheckoutI
     deliveryMode: "zone",
     zoneId: IDS.zone,
     idempotencyKey: newKey(),
+    paymentMethodId: METHOD_ID,
     customer: {
       fullName: "Jean Test",
       phone: "4646-1212",

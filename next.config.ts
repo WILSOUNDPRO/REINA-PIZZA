@@ -7,7 +7,14 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(self)" },
 ];
 
+// Les photos du menu sont servies par Supabase Storage : on autorise uniquement cet hôte pour l'optimisation d'images.
+const supabaseHost = (() => { try { return new URL(process.env.SUPABASE_URL ?? "").hostname; } catch { return ""; } })();
+
 const config: NextConfig = {
+  images: {
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: supabaseHost ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/public/**" }] : [],
+  },
   poweredByHeader: false,
   async headers() {
     return [

@@ -1,10 +1,10 @@
 // Applique les migrations SQL de supabase/migrations (fichiers triés) sur DATABASE_URL.
-// Usage : npm run db:migrate   |   npm run db:seed-demo (migrations + données de démonstration, dev seulement)
+// Usage : npm run db:migrate
 import postgres from "postgres";
 import fs from "node:fs";
 import path from "node:path";
 
-export async function migrate(url: string, opts: { seedDemo?: boolean } = {}) {
+export async function migrate(url: string) {
   const sql = postgres(url, { max: 1, onnotice: () => {} });
   try {
     await sql`create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())`;
@@ -18,11 +18,6 @@ export async function migrate(url: string, opts: { seedDemo?: boolean } = {}) {
       });
       console.log(`migration appliquée : ${file}`);
     }
-    if (opts.seedDemo) {
-      if (process.env.NODE_ENV === "production") throw new Error("Le seed de démonstration est interdit en production.");
-      await sql.unsafe(fs.readFileSync(path.join(process.cwd(), "supabase", "seed_demo.sql"), "utf8"));
-      console.log("données de démonstration insérées (is_demo = true)");
-    }
   } finally {
     await sql.end();
   }
@@ -34,7 +29,7 @@ if (process.argv[1]?.endsWith("migrate.ts")) {
     console.error("DATABASE_URL manquant");
     process.exit(1);
   }
-  migrate(url, { seedDemo: process.argv.includes("--seed-demo") }).catch((e) => {
+  migrate(url).catch((e) => {
     console.error(e.message);
     process.exit(1);
   });

@@ -14,6 +14,7 @@ export function getProvider(id: string): PaymentProvider | null {
 
 /** Prestataire actif et correctement configuré, sinon null : le paiement est alors désactivé et l'interface l'indique. */
 export function activeProvider(): PaymentProvider | null {
+  if (!env.onlinePaymentsEnabled()) return null;
   const p = getProvider(env.paymentProvider());
   return p && p.isConfigured() ? p : null;
 }

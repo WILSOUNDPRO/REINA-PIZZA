@@ -1,7 +1,9 @@
 # Paiement : état et intégration
 
-**Aucun prestataire réel n'est connecté. Le paiement en ligne n'est donc PAS opérationnel.**
-Tant que `PAYMENT_PROVIDER` n'est pas un prestataire configuré, le site affiche « Le paiement en ligne n'est pas encore disponible » et la commande reste enregistrée (règlement via WhatsApp).
+> **Version actuelle : aucun paiement n'a lieu sur le site.** Le client enregistre sa commande, puis confirme livraison et paiement avec la pizzeria (WhatsApp ou téléphone). L'administrateur confirme manuellement un paiement réellement reçu (statut « Confirmé manuellement », journalisé avec auteur et date).
+> Les boutons de paiement en ligne, le parcours d'acceptation du total et les routes `/api/orders/[token]/pay|accept` ont été retirés. Le code serveur ci-dessous est conservé **désactivé** (`ONLINE_PAYMENTS_ENABLED` absent ou différent de `true`) pour une mise à jour future ; la page de simulation a été supprimée avec l'interface.
+
+**Aucun prestataire réel n'est connecté.**
 
 ## Ce qui est prêt (testé)
 - Interface `PaymentProvider` (`src/server/payments/types.ts`) : `createCheckout` (session hébergée par le prestataire) et `verifyWebhook` (signature obligatoire).

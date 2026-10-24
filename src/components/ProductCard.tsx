@@ -1,22 +1,31 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { useCart } from "./CartProvider";
 import { PizzaMark } from "./PizzaMark";
 import { formatMoney } from "@/lib/money";
 import { SIZE_HINT } from "@/lib/labels";
-import { MAX_LINE_QUANTITY, type Currency, type Size } from "@/lib/constants";
+import { MAX_LINE_QUANTITY, SIZES, type Currency, type Size } from "@/lib/constants";
 import type { CatalogExtra, CatalogProduct } from "@/server/catalog";
 
-export function ProductImage({ url, name, className = "" }: { url: string | null; name: string; className?: string }) {
+// Cadrage uniforme : le conteneur impose le format, l'image est recadrée (object-cover) sans déformation.
+function isLocalHost(url: string) {
+  try { const h = new URL(url).hostname; return h === "localhost" || h === "127.0.0.1"; } catch { return false; }
+}
+
+export function ProductImage({ url, name, className = "", sizes = "(max-width: 640px) 100vw, 400px", priority = false }: { url: string | null; name: string; className?: string; sizes?: string; priority?: boolean }) {
   if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={name} loading="lazy" decoding="async" className={`object-cover ${className}`} />;
+    return (
+      <div className={`relative overflow-hidden bg-cream-2 ${className}`}>
+        <Image src={url} alt={name} fill sizes={sizes} priority={priority} quality={80} unoptimized={isLocalHost(url)} className="object-cover" />
+      </div>
+    );
   }
   return (
     <div className={`grid place-items-center bg-cream-2 text-ink-soft ${className}`} role="img" aria-label={`Photo de ${name} à venir`}>
       <div className="flex flex-col items-center gap-1">
-        <PizzaMark className="h-16 w-16 opacity-70" />
+        <PizzaMark className="h-16 w-16 opacity-60" />
         <span className="text-xs font-bold">Photo à venir</span>
       </div>
     </div>
@@ -46,21 +55,32 @@ export function ProductCard({ p, extras, currency, orderable }: { p: CatalogProd
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <h3 className="text-xl font-bold leading-tight">{p.name}</h3>
-          {p.is_demo && <span className="badge mt-1 bg-cream-2 text-ink-soft">Produit de démonstration</span>}
           {p.description && <p className="mt-1 text-sm text-ink-soft">{p.description}</p>}
         </div>
 
         <fieldset>
           <legend className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">Taille</legend>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(4.5rem,1fr))] gap-2">
-            {p.sizes.map((s) => (
-              <label key={s.size} title={SIZE_HINT[s.size]} className={`cursor-pointer rounded-2xl border-2 px-2 py-2 text-center transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-basil ${size === s.size ? "border-tomato bg-tomato text-white" : "border-line bg-paper hover:border-ink"}`}>
-                <input type="radio" name={`size-${p.id}`} className="sr-only" checked={size === s.size} onChange={() => setSize(s.size)} />
-                <span className="block text-base font-extrabold">{s.size}</span>
-                <span className="block text-xs font-semibold">{formatMoney(s.price_minor, currency)}</span>
-              </label>
-            ))}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(4.75rem,1fr))] gap-2">
+            {SIZES.map((sz) => {
+              const priced = p.sizes.find((x) => x.size === sz);
+              if (!priced) {
+                return (
+                  <div key={sz} aria-disabled="true" title={`La taille ${sz} n'a pas encore de prix : elle n'est pas disponible à la commande.`} className="cursor-not-allowed rounded-2xl border-2 border-dashed border-line px-2 py-2 text-center text-ink-soft opacity-70">
+                    <span className="block text-base font-extrabold">{sz}</span>
+                    <span className="block text-xs font-semibold">Prix à venir</span>
+                  </div>
+                );
+              }
+              return (
+                <label key={sz} title={SIZE_HINT[sz]} className={`cursor-pointer rounded-2xl border-2 px-2 py-2 text-center transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-basil ${size === sz ? "border-tomato bg-tomato text-white" : "border-line bg-paper hover:border-ink"}`}>
+                  <input type="radio" name={`size-${p.id}`} className="sr-only" checked={size === sz} onChange={() => setSize(sz)} />
+                  <span className="block text-base font-extrabold">{sz}</span>
+                  <span className="block text-xs font-semibold">{formatMoney(priced.price_minor, currency)}</span>
+                </label>
+              );
+            })}
           </div>
+          {p.sizes.length < SIZES.length && <p className="mt-1.5 text-xs text-ink-soft">Les tailles « Prix à venir » ne sont pas encore disponibles à la commande.</p>}
         </fieldset>
 
         {extras.length > 0 && (

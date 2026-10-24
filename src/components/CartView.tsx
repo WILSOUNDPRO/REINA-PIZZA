@@ -33,7 +33,7 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
       <div className="space-y-3">
         {problems.map((p) => (
           <div key={p.key} role="alert" className="flex items-center justify-between gap-3 rounded-2xl border-2 border-tomato bg-paper p-4">
-            <p className="text-sm"><strong>{p.productName}</strong> n'est plus disponible dans cette configuration.</p>
+            <p className="text-sm"><strong>{p.productName}</strong> n'est plus disponible à la commande.</p>
             <button className="btn btn-ghost !min-h-10 text-sm" onClick={() => remove(p.key)}>Retirer</button>
           </div>
         ))}
@@ -69,8 +69,8 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
       </div>
 
       <aside className="card h-fit space-y-3 p-5 lg:sticky lg:top-24" aria-label="Récapitulatif">
-        <div className="flex justify-between text-lg"><span>Sous-total</span><strong>{formatMoney(data?.subtotalMinor ?? 0, currency)}</strong></div>
-        <p className="text-sm text-ink-soft">Livraison : calculée à l'étape suivante, selon votre zone. Le total complet vous sera montré avant tout paiement.</p>
+        <div className="flex justify-between text-lg"><span>Sous-total des produits</span><strong>{formatMoney(data?.subtotalMinor ?? 0, currency)}</strong></div>
+        <p className="text-sm text-ink-soft">Livraison : les frais sont indiqués à l'étape suivante si votre zone est tarifée, sinon ils sont à confirmer avec la pizzeria. Aucun paiement n'est effectué sur ce site.</p>
         {!canOrder && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-bold text-white">{blockedReason}</p>}
         <Link href="/commander" aria-disabled={blocked} className={`btn btn-primary btn-lg ${blocked ? "pointer-events-none opacity-55" : ""}`} tabIndex={blocked ? -1 : 0}>
           Continuer vers la livraison

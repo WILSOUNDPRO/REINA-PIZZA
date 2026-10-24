@@ -19,7 +19,7 @@ export type PayabilityInput = {
 
 /** État du paiement d'une commande, calculé de façon identique côté serveur et dans l'interface. */
 export function payState(o: PayabilityInput, now = new Date()): PayState {
-  if (o.payment_status === "paid") return "paid";
+  if (o.payment_status === "paid" || o.payment_status === "confirmed_manually") return "paid";
   if (o.payment_status === "review") return "review";
   if (o.order_status === "cancelled") return "order_cancelled";
   if (o.fee_status === "to_confirm") return "await_fee";

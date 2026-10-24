@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { getSql } from "@/server/db";
 import { requireAdmin, passwordLogin, setSessionCookies, clearSession } from "@/server/admin/auth";
 import { uploadMenuImage } from "@/server/admin/storage";
-import { setDeliveryFee, setOrderStatus } from "@/server/orders";
+import { setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
 import { allow, clientKey } from "@/server/ratelimit";
 import { bool, int, money, str } from "@/server/admin/money-input";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/labels";
@@ -66,7 +66,19 @@ export async function setFeeAction(formData: FormData) {
   const fee = money(formData, "fee");
   if (!isUuid(id) || fee === null) back(path, "Montant invalide (ex. 250 ou 250,50).", false);
   const r = await setDeliveryFee(getSql(), id, fee, admin.email);
-  back(path, r.ok ? "Frais enregistrés. Envoyez le lien au client pour qu'il accepte le total." : r.message, r.ok);
+  back(path, r.ok ? "Frais enregistrés. Communiquez le total au client." : r.message, r.ok);
+}
+
+export async function setPaymentStatusAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const id = str(formData, "orderId");
+  const to = str(formData, "status");
+  const path = `/admin/commandes/${id}`;
+  if (!isUuid(id) || !to) back(path, "Choisissez un statut de paiement.", false);
+  // Confirmer un paiement exige une case cochée explicitement par l'administrateur connecté.
+  if (to === "confirmed_manually" && !bool(formData, "confirmReceived")) back(path, "Cochez la case de confirmation : le paiement doit avoir été réellement reçu.", false);
+  const r = await setManualPaymentStatus(getSql(), id, to, admin.email);
+  back(path, r.ok ? "Statut de paiement mis à jour." : r.message, r.ok);
 }
 
 // ───────────── Menu ─────────────
@@ -218,6 +230,44 @@ export async function deleteZoneAction(formData: FormData) {
   back("/admin/zones", "Zone supprimée.");
 }
 
+// ───────────── Moyens de paiement proposés aux clients ─────────────
+export async function saveMethodAction(formData: FormData) {
+  await requireAdmin();
+  const sql = getSql();
+  const id = str(formData, "id");
+  const label = str(formData, "label");
+  const path = "/admin/reglages";
+  if (!label || label.length > 80) back(path, "Libellé invalide (80 caractères max).", false);
+  const enabled = isUuid(id) ? bool(formData, "enabled") : true;
+  try {
+    if (isUuid(id)) {
+      if (!enabled) {
+        const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from payment_methods where enabled and id <> ${id}`;
+        if (n === 0) back(path, "Au moins un moyen de paiement doit rester activé.", false);
+      }
+      await sql`update payment_methods set label = ${label}, enabled = ${enabled}, position = ${int(formData, "position")} where id = ${id}`;
+    } else {
+      await sql`insert into payment_methods (label, position) values (${label}, ${int(formData, "position", 10)})`;
+    }
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") back(path, "Ce moyen de paiement existe déjà.", false);
+    throw e;
+  }
+  back(path, "Moyen de paiement enregistré.");
+}
+
+export async function deleteMethodAction(formData: FormData) {
+  await requireAdmin();
+  const sql = getSql();
+  const id = str(formData, "id");
+  if (isUuid(id)) {
+    const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from payment_methods where enabled and id <> ${id}`;
+    if (n === 0) back("/admin/reglages", "Au moins un moyen de paiement doit rester activé.", false);
+    await sql`delete from payment_methods where id = ${id}`; // les commandes gardent le libellé choisi
+  }
+  back("/admin/reglages", "Moyen de paiement supprimé.");
+}
+
 // ───────────── Réglages ─────────────
 export async function saveSettingsAction(formData: FormData) {
   await requireAdmin();
@@ -226,13 +276,10 @@ export async function saveSettingsAction(formData: FormData) {
   const wa = str(formData, "whatsapp").replace(/\D/g, "");
   const phone = str(formData, "phone");
   const currency = str(formData, "currency");
-  const ttl = int(formData, "proposalTtl", 24);
-  const payTtl = int(formData, "paymentTtl", 30);
   if (!str(formData, "name") || !str(formData, "address") || !phone) back(path, "Nom, adresse et téléphone sont obligatoires.", false);
   if (!/^\d{8,15}$/.test(wa)) back(path, "Numéro WhatsApp invalide (chiffres avec indicatif, ex. 50946461212).", false);
   if (phone && !normalizePhone(phone)) back(path, "Téléphone invalide.", false);
   if (currency && !(CURRENCIES as readonly string[]).includes(currency)) back(path, "Devise invalide.", false);
-  if (ttl < 1 || ttl > 168 || payTtl < 5 || payTtl > 1440) back(path, "Durées de validité hors limites.", false);
 
   const [cur] = await sql<{ currency: string | null }[]>`select currency from settings where id = 1`;
   const [{ n }] = await sql<{ n: number }[]>`select count(*)::int as n from orders`;
@@ -242,8 +289,7 @@ export async function saveSettingsAction(formData: FormData) {
   }
   await sql`update settings set restaurant_name = ${str(formData, "name")}, address = ${str(formData, "address")}, phone = ${phone},
     whatsapp_number = ${wa}, hours_text = ${str(formData, "hours") || "Ouvert 24 h/24, 7 j/7"}, currency = ${newCur},
-    orders_paused = ${bool(formData, "paused")}, pause_message = ${str(formData, "pauseMessage") || null},
-    proposal_ttl_hours = ${ttl}, payment_ttl_minutes = ${payTtl} where id = 1`;
+    orders_paused = ${bool(formData, "paused")}, pause_message = ${str(formData, "pauseMessage") || null} where id = 1`;
   log("admin.settings_saved");
   back(path, "Réglages enregistrés.");
 }

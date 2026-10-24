@@ -63,7 +63,7 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
             </>
           )}
           <input type="file" name="image" accept="image/jpeg,image/png,image/webp" className="block w-full text-sm" />
-          <p className="text-xs text-ink-soft">JPEG, PNG ou WebP, 5 Mo maximum.{!storageConfigured() && " ⚠ Stockage non configuré : le téléversement échouera."}</p>
+          <p className="text-xs text-ink-soft">JPEG, PNG ou WebP, 5 Mo maximum. L'image est recadrée automatiquement au format 4:3 (1200×900, WebP), sans retouche : cadrez bien le produit au centre.{!storageConfigured() && " ⚠ Stockage non configuré : le téléversement échouera."}</p>
         </div>
 
         <div className="flex flex-wrap gap-x-6">

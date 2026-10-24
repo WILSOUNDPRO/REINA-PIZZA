@@ -6,7 +6,7 @@ import { env } from "./env";
 import { log } from "./logger";
 import type { CheckoutInput } from "@/lib/validation";
 import type { Currency } from "@/lib/constants";
-import { allowedNextStatuses, type FeeStatus, type OrderStatus, type PaymentStatus } from "@/lib/labels";
+import { allowedNextStatuses, MANUAL_PAYMENT_STATUSES, type FeeStatus, type OrderStatus, type PaymentStatus } from "@/lib/labels";
 
 export type OrderRow = {
   id: string;
@@ -34,6 +34,9 @@ export type OrderRow = {
   gps_location: string | null;
   delivery_instructions: string | null;
   notes: string | null;
+  payment_method: string | null;
+  payment_method_note: string | null;
+  payment_confirmed_by: string | null;
   has_demo_items: boolean;
   acknowledged_at: Date | null;
   paid_at: Date | null;
@@ -64,7 +67,7 @@ export type OrderEventRow = {
 
 export type CreateOrderResult =
   | { ok: true; ref: string; token: string; existing: boolean }
-  | { ok: false; code: "paused" | "currency_missing" | "cart_problems" | "zone_invalid" | "price_changed" | "demo_blocked"; message: string; problems?: CartProblem[]; totalMinor?: number };
+  | { ok: false; code: "paused" | "currency_missing" | "payment_method_invalid" | "cart_problems" | "zone_invalid" | "price_changed" | "demo_blocked"; message: string; problems?: CartProblem[]; totalMinor?: number };
 
 const REF_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const newRef = () => "RP-" + Array.from({ length: 6 }, () => REF_ALPHABET[randomInt(REF_ALPHABET.length)]).join("");
@@ -117,6 +120,9 @@ export async function createOrder(sql: Sql, input: CheckoutInput): Promise<Creat
     }
   }
 
+  const [method] = await sql<{ label: string }[]>`select label from payment_methods where id = ${input.paymentMethodId} and enabled`;
+  if (!method) return { ok: false, code: "payment_method_invalid", message: "Ce moyen de paiement n'est plus proposé. Choisissez-en un autre." };
+
   const fee = zone ? zone.fee_minor : null;
   const total = fee === null ? null : cart.subtotalMinor + fee;
   const c = input.customer;
@@ -129,13 +135,12 @@ export async function createOrder(sql: Sql, input: CheckoutInput): Promise<Creat
       const created = await sql.begin(async (tx) => {
         const [row] = await tx<{ id: string }[]>`
           insert into orders (ref, access_token, idempotency_key, delivery_mode, delivery_zone_id, delivery_zone_name,
-            fee_status, total_expires_at, currency, subtotal_minor, delivery_fee_minor, total_minor,
+            fee_status, currency, subtotal_minor, delivery_fee_minor, total_minor, payment_method, payment_method_note,
             customer_name, customer_phone, customer_whatsapp, customer_email, commune, quarter, address, landmark,
             gps_location, delivery_instructions, notes, has_demo_items)
           values (${ref}, ${token}, ${input.idempotencyKey}, ${input.deliveryMode}, ${zone?.id ?? null}, ${zone?.name ?? null},
-            ${zone ? "accepted" : "to_confirm"},
-            ${zone ? sql`now() + make_interval(hours => ${settings.proposal_ttl_hours})` : null},
-            ${settings.currency!}, ${cart.subtotalMinor}, ${fee}, ${total},
+            ${zone ? "set" : "to_confirm"},
+            ${settings.currency!}, ${cart.subtotalMinor}, ${fee}, ${total}, ${method.label}, ${input.paymentMethodNote ?? null},
             ${c.fullName}, ${c.phone}, ${c.whatsapp ?? null}, ${c.email ?? null}, ${c.commune}, ${c.quarter}, ${c.address}, ${c.landmark},
             ${c.gps ?? null}, ${c.deliveryInstructions ?? null}, ${c.notes ?? null}, ${hasDemo})
           on conflict (idempotency_key) do nothing
@@ -202,21 +207,26 @@ export async function acceptFee(sql: Sql, token: string): Promise<ActionResult> 
   });
 }
 
-/** Admin : fixe (ou modifie / renouvelle) les frais de livraison. Le client doit ensuite accepter le nouveau total. */
-export async function setDeliveryFee(sql: Sql, orderId: string, feeMinor: number, actor: string): Promise<ActionResult> {
+/**
+ * Admin : fixe ou modifie les frais de livraison (le total en découle).
+ * `requireAcceptance` ne sert qu'à l'ancien parcours de paiement en ligne (désactivé) : le client devait alors accepter le total.
+ */
+export async function setDeliveryFee(sql: Sql, orderId: string, feeMinor: number, actor: string, opts: { requireAcceptance?: boolean } = {}): Promise<ActionResult> {
   if (!Number.isInteger(feeMinor) || feeMinor < 0 || feeMinor > 100_000_000) return { ok: false, message: "Montant invalide." };
   return sql.begin(async (tx) => {
     const [o] = await tx<OrderRow[]>`select * from orders where id = ${orderId} for update`;
     if (!o) return { ok: false, message: "Commande introuvable." } as const;
-    if (o.payment_status === "paid" || o.payment_status === "review") return { ok: false, message: "La commande est déjà payée : le total ne peut plus être modifié." } as const;
+    if (["paid", "review", "confirmed_manually"].includes(o.payment_status)) return { ok: false, message: "Le paiement est déjà confirmé : le total ne peut plus être modifié." } as const;
     if (o.order_status === "cancelled" || o.order_status === "delivered") return { ok: false, message: "La commande est terminée." } as const;
     const s = await getSettings(tx as unknown as Sql);
     const total = o.subtotal_minor + feeMinor;
-    // Toute session de paiement ouverte portait l'ancien total : elle est annulée.
-    await tx`update payments set status = 'cancelled' where order_id = ${o.id} and status = 'pending'`;
-    await tx`update orders set delivery_fee_minor = ${feeMinor}, total_minor = ${total}, fee_status = 'proposed',
-        total_version = total_version + 1, total_expires_at = now() + make_interval(hours => ${s.proposal_ttl_hours}),
-        payment_status = case when payment_status in ('pending', 'failed', 'cancelled') then 'unpaid' else payment_status end
+    // Toute session de paiement en ligne ouverte (ancien parcours) portait l'ancien total : elle est annulée.
+    const openOnline = await tx`update payments set status = 'cancelled' where order_id = ${o.id} and status = 'pending' returning id`;
+    await tx`update orders set delivery_fee_minor = ${feeMinor}, total_minor = ${total},
+        fee_status = ${opts.requireAcceptance ? "proposed" : "set"},
+        total_version = total_version + 1,
+        total_expires_at = ${opts.requireAcceptance ? tx`now() + make_interval(hours => ${s.proposal_ttl_hours})` : null},
+        payment_status = case when payment_status in ('failed', 'cancelled', 'unpaid') or (payment_status = 'pending' and ${openOnline.length > 0}) then 'to_arrange' else payment_status end
       where id = ${o.id}`;
     await addEvent(tx, o.id, "delivery_fee", actor, o.delivery_fee_minor === null ? null : String(o.delivery_fee_minor), String(feeMinor), {
       total_minor: total,
@@ -227,18 +237,39 @@ export async function setDeliveryFee(sql: Sql, orderId: string, feeMinor: number
   });
 }
 
+/** Admin : statut de paiement géré à la main. Jamais déclenché automatiquement (WhatsApp, livraison ou déclaration du client). */
+export async function setManualPaymentStatus(sql: Sql, orderId: string, to: string, actor: string): Promise<ActionResult> {
+  if (!(MANUAL_PAYMENT_STATUSES as readonly string[]).includes(to)) return { ok: false, message: "Statut de paiement invalide." };
+  return sql.begin(async (tx) => {
+    const [o] = await tx<OrderRow[]>`select * from orders where id = ${orderId} for update`;
+    if (!o) return { ok: false, message: "Commande introuvable." } as const;
+    if (o.payment_status === to) return { ok: true } as const;
+    if (o.payment_status === "paid" || o.payment_status === "review") {
+      return { ok: false, message: "Cette commande vient de l'ancien paiement en ligne : son statut ne se modifie pas ici." } as const;
+    }
+    const confirming = to === "confirmed_manually";
+    await tx`update orders set payment_status = ${to},
+        paid_at = ${confirming ? tx`now()` : null}, payment_confirmed_by = ${confirming ? actor : null},
+        acknowledged_at = coalesce(acknowledged_at, now())
+      where id = ${o.id}`;
+    await addEvent(tx, o.id, "payment", actor, o.payment_status, to, { manual: true, total_minor: o.total_minor });
+    log("order.payment_status", { ref: o.ref, to });
+    return { ok: true } as const;
+  });
+}
+
 export async function setOrderStatus(sql: Sql, orderId: string, to: OrderStatus, actor: string): Promise<ActionResult> {
   return sql.begin(async (tx) => {
     const [o] = await tx<OrderRow[]>`select * from orders where id = ${orderId} for update`;
     if (!o) return { ok: false, message: "Commande introuvable." } as const;
     if (!allowedNextStatuses(o.order_status).includes(to)) return { ok: false, message: "Changement de statut non autorisé." } as const;
     await tx`update orders set order_status = ${to},
-        payment_status = case when ${to} = 'cancelled' and payment_status = 'pending' then 'cancelled' else payment_status end,
+        payment_status = case when ${to} = 'cancelled' and exists (select 1 from payments where order_id = ${o.id} and status = 'pending') then 'cancelled' else payment_status end,
         acknowledged_at = coalesce(acknowledged_at, now())
       where id = ${o.id}`;
     if (to === "cancelled") await tx`update payments set status = 'cancelled' where order_id = ${o.id} and status = 'pending'`;
     // Une annulation n'entraîne jamais de remboursement automatique : on le consigne si la commande était payée.
-    await addEvent(tx, o.id, "status", actor, o.order_status, to, to === "cancelled" && o.payment_status === "paid" ? { refund: "manual_action_required" } : {});
+    await addEvent(tx, o.id, "status", actor, o.order_status, to, to === "cancelled" && ["paid", "confirmed_manually"].includes(o.payment_status) ? { refund: "manual_action_required" } : {});
     return { ok: true } as const;
   });
 }

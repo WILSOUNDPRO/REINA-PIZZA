@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { env } from "../env";
 
 const BUCKET = "menu-images";
@@ -24,11 +25,20 @@ export async function uploadMenuImage(file: File): Promise<{ ok: true; url: stri
   const bytes = new Uint8Array(await file.arrayBuffer());
   const kind = sniff(bytes);
   if (!kind) return { ok: false, message: "Format non pris en charge : utilisez JPEG, PNG ou WebP." };
-  const name = `${randomUUID()}.${kind.ext}`;
+  // Format unique pour toutes les cartes : 4:3, 1200×900, WebP. Recadrage centré sans déformation ni agrandissement ;
+  // l'orientation EXIF est appliquée puis les métadonnées (dont la position GPS éventuelle) sont supprimées.
+  // Aucune retouche de couleur ou de contenu n'est faite.
+  let out: Buffer;
+  try {
+    out = await sharp(bytes, { limitInputPixels: 40_000_000 }).rotate().resize(1200, 900, { fit: "cover", position: "centre", withoutEnlargement: true }).webp({ quality: 82 }).toBuffer();
+  } catch {
+    return { ok: false, message: "Image illisible ou corrompue." };
+  }
+  const name = `${randomUUID()}.webp`;
   const r = await fetch(`${env.supabaseUrl()}/storage/v1/object/${BUCKET}/${name}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${env.supabaseServiceKey()}`, apikey: env.supabaseServiceKey(), "Content-Type": kind.mime, "x-upsert": "false" },
-    body: bytes,
+    headers: { Authorization: `Bearer ${env.supabaseServiceKey()}`, apikey: env.supabaseServiceKey(), "Content-Type": "image/webp", "x-upsert": "false" },
+    body: new Uint8Array(out),
   });
   if (!r.ok) return { ok: false, message: "Échec du téléversement de l'image." };
   return { ok: true, url: `${env.supabaseUrl()}/storage/v1/object/public/${BUCKET}/${name}` };

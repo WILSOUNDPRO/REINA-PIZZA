@@ -15,18 +15,12 @@ export default async function MenuPage() {
     const k = p.category_name ?? "Nos pizzas";
     groups.set(k, [...(groups.get(k) ?? []), p]);
   }
-  const hasDemo = products.some((p) => p.is_demo);
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-8">
       <h1 className="text-4xl font-extrabold sm:text-5xl">Le menu</h1>
-      <p className="mt-2 max-w-2xl text-ink-soft">Choisissez votre taille, ajoutez au panier. Les frais de livraison sont calculés à l'étape suivante selon votre destination.</p>
+      <p className="mt-2 max-w-2xl text-ink-soft">Choisissez votre taille et ajoutez au panier. Le paiement est organisé directement avec la pizzeria après l'enregistrement de votre commande.</p>
 
-      {hasDemo && (
-        <div role="note" className="mt-4 rounded-2xl border-2 border-dashed border-tomato bg-paper p-4 text-sm">
-          <strong>Menu de démonstration.</strong> Les produits, descriptions et prix affichés sont fictifs, en attendant le vrai menu de Reina Pizza.
-        </div>
-      )}
       {settings.orders_paused && (
         <div role="alert" className="mt-4 rounded-2xl bg-tomato p-4 font-bold text-white">
           {settings.pause_message || "Les commandes sont temporairement suspendues."}

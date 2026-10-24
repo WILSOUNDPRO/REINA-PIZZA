@@ -3,7 +3,6 @@ import { getSql } from "@/server/db";
 import { listOrders } from "@/server/orders";
 import { OrderListItem } from "@/components/admin/OrderRow";
 import { getSettings } from "@/server/settings";
-import { paymentsAvailable } from "@/server/payments/index";
 import { env } from "@/server/env";
 
 export default async function Dashboard() {
@@ -15,10 +14,11 @@ export default async function Dashboard() {
       count(*) filter (where (created_at at time zone 'America/Port-au-Prince')::date = (now() at time zone 'America/Port-au-Prince')::date)::int as today,
       count(*) filter (where payment_status = 'paid' and (paid_at at time zone 'America/Port-au-Prince')::date = (now() at time zone 'America/Port-au-Prince')::date)::int as paid_today
     from orders`;
-  const [settings, recent, products] = await Promise.all([
+  const [settings, recent, products, zones] = await Promise.all([
     getSettings(sql),
     listOrders(sql, { unacknowledged: true }),
     sql<{ n: number; demo: number }[]>`select count(*)::int as n, count(*) filter (where is_demo)::int as demo from products`,
+    sql<{ n: number }[]>`select count(*)::int as n from delivery_zones where active`,
   ]);
   const cards: [string, number, string][] = [
     ["Nouvelles commandes", stats.new_, "/admin/commandes?vue=nouvelles"],
@@ -28,8 +28,8 @@ export default async function Dashboard() {
   ];
   const warnings: string[] = [];
   if (!settings.currency) warnings.push("La devise n'est pas confirmée : les commandes sont bloquées. Réglages → Devise.");
-  if (!paymentsAvailable()) warnings.push("Aucun prestataire de paiement n'est configuré : le paiement en ligne est désactivé (les clients voient un message explicite).");
-  if (products[0].demo > 0) warnings.push(`${products[0].demo} produit(s) de démonstration au menu. Remplacez-les par le vrai menu (Menu → Supprimer les données de démo).`);
+  if (products[0].demo > 0) warnings.push(`${products[0].demo} produit(s) de démonstration au menu : à remplacer par le vrai menu.`);
+  if (zones[0].n === 0) warnings.push("Aucune zone de livraison tarifée : tous les clients voient « frais à confirmer ». Ajoutez les zones et tarifs (Livraison).");
   if (products[0].n === 0) warnings.push("Le menu est vide.");
   if (settings.orders_paused) warnings.push("Les commandes sont actuellement SUSPENDUES.");
   if (!env.siteUrl()) warnings.push("SITE_URL n'est pas défini : les liens clients utilisent l'hôte de la requête en cours.");

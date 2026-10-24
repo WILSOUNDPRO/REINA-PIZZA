@@ -1,12 +1,14 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { IDS, checkout, newKey, resetDb, sql } from "./helpers";
-import { acceptFee, createOrder, getOrderByToken, setDeliveryFee, setOrderStatus } from "@/server/orders";
+import fs from "node:fs";
+import { IDS, METHOD_ID, checkout, newKey, resetDb, sql } from "./helpers";
+import { acceptFee, createOrder, getOrderByToken, setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
 import { applyWebhookEvent, startPayment } from "@/server/payments";
 import { simulationProvider, signSimulationPayload, SIMULATION_SIGNATURE_HEADER } from "@/server/payments/simulation";
 import { InvalidWebhookError } from "@/server/payments/types";
 import { payState } from "@/lib/orderState";
 
 beforeAll(() => {
+  process.env.ONLINE_PAYMENTS_ENABLED = "true"; // architecture désactivée par défaut : activée ici pour la tester
   process.env.PAYMENT_PROVIDER = "simulation";
   process.env.SIMULATION_WEBHOOK_SECRET = "test-secret";
 });
@@ -36,7 +38,7 @@ describe("commande avec zone tarifée", () => {
     expect(order.subtotal_minor).toBe(340000);
     expect(order.delivery_fee_minor).toBe(25000);
     expect(order.total_minor).toBe(365000);
-    expect(order.fee_status).toBe("accepted");
+    expect(order.fee_status).toBe("set");
     expect(payState(order)).toBe("payable");
     expect(items[0]).toMatchObject({ product_name: "Pizza A", unit_price_minor: 170000, quantity: 2 });
 
@@ -106,7 +108,7 @@ describe("frais à confirmer, puis paiement du total approuvé", () => {
     expect((await sql`select count(*)::int as n from payments`)[0].n).toBe(0);
 
     // L'admin fixe les frais.
-    expect(await setDeliveryFee(sql, order.id, 40000, "admin@test")).toEqual({ ok: true });
+    expect(await setDeliveryFee(sql, order.id, 40000, "admin@test", { requireAcceptance: true })).toEqual({ ok: true });
     let o = await orderRow(order.id);
     expect(o.total_minor).toBe(380000);
     expect(o.fee_status).toBe("proposed");
@@ -131,7 +133,7 @@ describe("frais à confirmer, puis paiement du total approuvé", () => {
     const p = await pay(order.access_token);
     expect(await setDeliveryFee(sql, order.id, 50000, "admin@test")).toEqual({ ok: true });
     expect((await sql`select status from payments where id = ${p.id}`)[0].status).toBe("cancelled");
-    expect((await orderRow(order.id)).payment_status).toBe("unpaid");
+    expect((await orderRow(order.id)).payment_status).toBe("to_arrange");
 
     // Le prestataire notifie tout de même un paiement de l'ancien montant : jamais marqué « payée ».
     expect(await hook(p.provider_ref, "paid", p.amount_minor)).toBe("mismatch");
@@ -146,7 +148,7 @@ describe("frais à confirmer, puis paiement du total approuvé", () => {
     await sql`update orders set total_expires_at = now() - interval '1 minute' where id = ${order.id}`;
     expect(payState(await orderRow(order.id) as never)).toBe("expired");
     expect(await startPayment(sql, order.access_token)).toMatchObject({ ok: false, message: expect.stringContaining("expiré") });
-    await setDeliveryFee(sql, order.id, 25000, "admin@test");
+    await setDeliveryFee(sql, order.id, 25000, "admin@test", { requireAcceptance: true });
     await acceptFee(sql, order.access_token);
     expect(await startPayment(sql, order.access_token)).toMatchObject({ ok: true });
   });
@@ -313,16 +315,131 @@ describe("RLS", () => {
     await place();
     for (const role of ["anon", "authenticated"]) {
       await sql`grant usage on schema public to ${sql(role)}`;
-      await sql`grant select on orders, order_items, payments, settings to ${sql(role)}`; // pire cas : droits SQL accordés
+      await sql`grant select on orders, order_items, payments, settings, payment_methods to ${sql(role)}`; // pire cas : droits SQL accordés
       let denied = 0;
-      for (const t of ["orders", "order_items", "payments", "settings"]) {
+      for (const t of ["orders", "order_items", "payments", "settings", "payment_methods"]) {
         const rows = await sql.begin(async (tx) => {
           await tx.unsafe(`set local role ${role}`);
           return tx.unsafe(`select * from ${t}`);
         });
         if (rows.length === 0) denied++;
       }
-      expect(denied, role).toBe(4); // la RLS sans politique renvoie 0 ligne même si le droit SQL existe
+      expect(denied, role).toBe(5); // la RLS sans politique renvoie 0 ligne même si le droit SQL existe
     }
+  });
+});
+
+
+describe("version 1 : commande sans paiement en ligne", () => {
+  it("enregistre une commande sans prestataire ni paiement, statut de paiement « à organiser »", async () => {
+    process.env.ONLINE_PAYMENTS_ENABLED = "false";
+    try {
+      const { order } = await place();
+      expect(order.payment_status).toBe("to_arrange");
+      expect(order.order_status).toBe("to_confirm");
+      expect(order.payment_method).toBe("À convenir avec la pizzeria");
+      expect((await sql`select count(*)::int as n from payments`)[0].n).toBe(0);
+      expect(await startPayment(sql, order.access_token)).toMatchObject({ ok: false });
+    } finally {
+      process.env.ONLINE_PAYMENTS_ENABLED = "true";
+    }
+  });
+
+  it("frais inconnus : commande acceptée, sous-total conservé, pas de total ; l'admin ajoute ensuite les frais", async () => {
+    const { order } = await place({ deliveryMode: "quote", zoneId: undefined, paymentMethodNote: "espèces" });
+    expect(order).toMatchObject({ fee_status: "to_confirm", delivery_fee_minor: null, total_minor: null, subtotal_minor: 340000, payment_method_note: "espèces" });
+    expect(await setDeliveryFee(sql, order.id, 30000, "admin@test")).toEqual({ ok: true });
+    const o = await orderRow(order.id);
+    expect(o).toMatchObject({ fee_status: "set", delivery_fee_minor: 30000, total_minor: 370000, payment_status: "to_arrange" });
+  });
+
+  it("moyen de paiement : obligatoire, doit être activé", async () => {
+    await sql`update payment_methods set enabled = false where id = ${METHOD_ID}`;
+    expect(await createOrder(sql, checkout())).toMatchObject({ ok: false, code: "payment_method_invalid" });
+    await sql`update payment_methods set enabled = true`;
+    expect(await createOrder(sql, checkout({ paymentMethodId: "99999999-9999-9999-9999-999999999999" }))).toMatchObject({ ok: false, code: "payment_method_invalid" });
+  });
+
+  it("confirmation manuelle du paiement : journalisée avec auteur et date, jamais automatique", async () => {
+    const { order } = await place();
+    // Ni le changement de statut de commande ni la livraison ne confirment le paiement.
+    for (const st of ["confirmed", "preparing", "out_for_delivery", "delivered"] as const) await setOrderStatus(sql, order.id, st, "admin@test");
+    let o = await orderRow(order.id);
+    expect(o).toMatchObject({ order_status: "delivered", payment_status: "to_arrange", paid_at: null, payment_confirmed_by: null });
+
+    expect(await setManualPaymentStatus(sql, order.id, "pending", "admin@test")).toEqual({ ok: true });
+    expect(await setManualPaymentStatus(sql, order.id, "bogus", "admin@test")).toMatchObject({ ok: false });
+    expect(await setManualPaymentStatus(sql, order.id, "confirmed_manually", "admin@test")).toEqual({ ok: true });
+    o = await orderRow(order.id);
+    expect(o).toMatchObject({ payment_status: "confirmed_manually", payment_confirmed_by: "admin@test" });
+    expect(o.paid_at).not.toBeNull();
+    const ev = await sql`select actor, from_value, to_value, meta, created_at from order_events where kind = 'payment' and order_id = ${order.id} order by id`;
+    expect(ev.map((e) => [e.actor, e.from_value, e.to_value])).toEqual([["admin@test", "to_arrange", "pending"], ["admin@test", "pending", "confirmed_manually"]]);
+    expect(ev[1].meta).toMatchObject({ manual: true });
+    // Total verrouillé après confirmation.
+    expect(await setDeliveryFee(sql, order.id, 1, "admin@test")).toMatchObject({ ok: false });
+    // Annuler ne rembourse pas : le paiement reste confirmé.
+    const { order: o2 } = await place();
+    await setManualPaymentStatus(sql, o2.id, "confirmed_manually", "admin@test");
+    await setOrderStatus(sql, o2.id, "cancelled", "admin@test");
+    expect((await orderRow(o2.id)).payment_status).toBe("confirmed_manually");
+  });
+
+  it("l'ancien statut « payé » (paiement en ligne) n'est pas modifiable à la main", async () => {
+    const { order } = await place();
+    await sql`update orders set payment_status = 'paid' where id = ${order.id}`;
+    expect(await setManualPaymentStatus(sql, order.id, "to_arrange", "admin@test")).toMatchObject({ ok: false });
+  });
+});
+
+describe("migration catalogue réel (idempotente)", () => {
+  const sqlText = fs.readFileSync("supabase/migrations/20260102000000_offline_payment_real_catalog.sql", "utf8");
+  const run = () => sql.unsafe(sqlText);
+
+  it("crée les 3 produits réels en HTG, taille S uniquement, sans ingrédient inventé", async () => {
+    await sql`truncate products, categories, extras, delivery_zones cascade`;
+    await run();
+    await run(); // idempotent
+    const rows = await sql`select p.name, p.description, p.is_demo, s.size, s.price_minor from products p join product_sizes s on s.product_id = p.id order by p.position`;
+    expect(rows.map((r) => [r.name, r.size, r.price_minor])).toEqual([["Pizza pepperoni", "S", 150000], ["Pizza jambon", "S", 125000], ["Pizza hareng saur", "S", 180000]]);
+    expect(rows.every((r) => r.description === "" && r.is_demo === false)).toBe(true);
+    expect((await sql`select count(*)::int as n from products`)[0].n).toBe(3);
+  });
+
+  it("n'écrase pas un prix déjà modifié et supprime seulement les données de démo", async () => {
+    await sql`truncate products, categories, extras, delivery_zones cascade`;
+    await run();
+    await sql`update product_sizes set price_minor = 175000 where size = 'S' and product_id = (select id from products where name = 'Pizza pepperoni')`;
+    await sql`insert into product_sizes (product_id, size, price_minor) select id, 'M', 220000 from products where name = 'Pizza pepperoni'`;
+    await sql`insert into products (name, is_demo) values ('[DÉMO] x', true)`;
+    await sql`insert into delivery_zones (name, fee_minor, is_demo) values ('démo', 1, true), ('réelle', 5000, false)`;
+    await run();
+    const [pep] = await sql`select s.price_minor from product_sizes s join products p on p.id = s.product_id where p.name = 'Pizza pepperoni' and s.size = 'S'`;
+    expect(pep.price_minor).toBe(175000);
+    expect((await sql`select count(*)::int as n from product_sizes s join products p on p.id = s.product_id where p.name = 'Pizza pepperoni'`)[0].n).toBe(2);
+    expect((await sql`select count(*)::int as n from products where is_demo`)[0].n).toBe(0);
+    expect((await sql`select name from delivery_zones`).map((z) => z.name)).toEqual(["réelle"]);
+  });
+
+  it("ne supprime pas les commandes existantes liées à des produits de démo", async () => {
+    await resetDb({ demo: true });
+    const { order } = await place();
+    const before = await orderRow(order.id);
+    await run();
+    const after = await orderRow(order.id);
+    expect(after.total_minor).toBe(before.total_minor);
+    expect(after.payment_status).toBe("to_arrange");
+    const items = await sql`select product_id, product_name, unit_price_minor from order_items where order_id = ${order.id}`;
+    expect(items[0]).toMatchObject({ product_id: null, product_name: "Pizza A", unit_price_minor: 170000 });
+  });
+});
+
+describe("tailles sans prix", () => {
+  it("la commande est impossible pour une taille sans prix réel, même en forçant la requête", async () => {
+    await sql`delete from product_sizes where product_id = ${IDS.pizzaA} and size = 'M'`;
+    for (const size of ["M", "L", "XL", "XXL"]) {
+      expect(await createOrder(sql, checkout({ items: [{ productId: IDS.pizzaA, size, quantity: 1 }] }))).toMatchObject({ ok: false, code: "cart_problems" });
+    }
+    expect(await createOrder(sql, checkout({ items: [{ productId: IDS.pizzaA, size: "S", quantity: 1 }] }))).toMatchObject({ ok: true });
   });
 });

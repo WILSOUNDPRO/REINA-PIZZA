@@ -32,7 +32,7 @@ function Field({ id, label, error, hint, children, optional }: { id: string; lab
   );
 }
 
-export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[]; currency: Currency; emailEnabled: boolean }) {
+export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: { zones: Zone[]; currency: Currency; emailEnabled: boolean; paymentMethods: { id: string; label: string }[] }) {
   const router = useRouter();
   const { items, ready, clear } = useCart();
   const { data, loading } = useServerCart(items, ready);
@@ -56,6 +56,7 @@ export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[];
   const zone = zones.find((z) => z.id === zoneId);
   const subtotal = data?.subtotalMinor ?? 0;
   const fee = mode === "zone" && zone ? zone.fee_minor : null;
+  const priced = !!data && !loading;
   const hasProblems = (data?.problems.length ?? 0) > 0;
 
   if (ready && items.length === 0) {
@@ -94,6 +95,8 @@ export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[];
       expectedTotalMinor: mode === "zone" && zone && data ? subtotal + zone.fee_minor : undefined,
       idempotencyKey: keyRef.current,
       website: v("website"),
+      paymentMethodId: v("paymentMethodId"),
+      paymentMethodNote: v("paymentMethodNote"),
       customer: {
         fullName: v("fullName"), phone: v("phone"), whatsapp: v("whatsapp"), email: v("email"), commune: v("commune"),
         quarter: v("quarter"), address: v("address"), landmark: v("landmark"), gps: v("gps"),
@@ -152,8 +155,8 @@ export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[];
           <label className={`flex min-h-14 cursor-pointer items-start gap-3 rounded-2xl border-2 p-3 ${mode === "quote" ? "border-basil bg-white" : "border-line"}`}>
             <input type="radio" name="zone" className="mt-1 h-5 w-5 accent-[#2d6a3e]" checked={mode === "quote"} onChange={() => setMode("quote")} />
             <span className="flex-1">
-              <strong>{zones.length ? "Mon adresse n'est pas dans la liste" : "Demander le tarif de livraison"}</strong>
-              <span className="block text-sm text-ink-soft">Vous envoyez votre demande, nous fixons les frais, puis vous recevez un lien pour voir le total, l'accepter et payer. Rien n'est encaissé avant.</span>
+              <strong>{zones.length ? "Mon adresse n'est pas dans la liste" : "Frais de livraison à confirmer"}</strong>
+              <span className="block text-sm text-ink-soft">Frais de livraison à confirmer avec la pizzeria selon votre adresse. Vous pouvez quand même enregistrer votre commande.</span>
             </span>
           </label>
           {errors.zoneId && <p role="alert" className="text-sm font-bold text-tomato">{errors.zoneId}</p>}
@@ -176,8 +179,22 @@ export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[];
           <Field id="f-landmark" label="Point de repère" error={err("landmark")} hint="Ex. en face de l'église, près de la pharmacie…"><input {...a("landmark")} /></Field>
         </fieldset>
 
+        <fieldset className="card space-y-4 p-5">
+          <legend className="px-1 font-display text-2xl font-bold">3. Paiement</legend>
+          <p className="rounded-xl bg-cream-2 p-3 text-sm"><strong>Le paiement sera organisé directement avec la pizzeria. Aucun paiement n'est effectué sur ce site.</strong> Ne communiquez jamais de numéro de carte, de code PIN, de mot de passe ou de code de validation.</p>
+          <Field id="f-paymentMethodId" label="Moyen de paiement souhaité" error={errors.paymentMethodId}>
+            <select id="f-paymentMethodId" name="paymentMethodId" className="field" defaultValue={paymentMethods.length === 1 ? paymentMethods[0].id : ""} aria-invalid={errors.paymentMethodId ? true : undefined}>
+              {paymentMethods.length !== 1 && <option value="" disabled>Choisir…</option>}
+              {paymentMethods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+          </Field>
+          <Field id="f-paymentMethodNote" label="Précisez le moyen dont vous disposez" optional error={errors.paymentMethodNote} hint="Ex. : espèces à la livraison, ou le service mobile que vous utilisez.">
+            <input id="f-paymentMethodNote" name="paymentMethodNote" maxLength={200} className="field" />
+          </Field>
+        </fieldset>
+
         <details className="card p-5">
-          <summary className="cursor-pointer font-display text-xl font-bold">3. Informations facultatives</summary>
+          <summary className="cursor-pointer font-display text-xl font-bold">4. Informations facultatives</summary>
           <div className="mt-4 space-y-4">
             <Field id="f-whatsapp" label="Numéro WhatsApp différent" optional error={err("whatsapp")}><input {...a("whatsapp")} type="tel" inputMode="tel" /></Field>
             <Field id="f-email" label="E-mail" optional error={err("email")} hint={emailEnabled ? "Pour recevoir la confirmation par e-mail." : "Inutile pour commander."}>
@@ -206,20 +223,23 @@ export function CheckoutForm({ zones, currency, emailEnabled }: { zones: Zone[];
           ))}
         </ul>
         <div className="space-y-1 border-t border-line pt-3">
-          <div className="flex justify-between"><span>Sous-total</span><strong>{formatMoney(subtotal, currency)}</strong></div>
-          <div className="flex justify-between"><span>Livraison</span><strong>{fee !== null ? formatMoney(fee, currency) : mode === "quote" ? "À confirmer" : "Choisissez une zone"}</strong></div>
-          <div className="flex justify-between border-t border-line pt-2 text-lg">
-            <span>Total</span>
-            <strong>{fee !== null ? formatMoney(subtotal + fee, currency) : "Frais de livraison à confirmer"}</strong>
-          </div>
+          <div className="flex justify-between"><span>Sous-total des produits</span><strong>{priced ? formatMoney(subtotal, currency) : "Calcul…"}</strong></div>
+          {fee !== null && !priced ? null : fee !== null ? (
+            <>
+              <div className="flex justify-between"><span>Livraison</span><strong>{formatMoney(fee, currency)}</strong></div>
+              <div className="flex justify-between border-t border-line pt-2 text-lg"><span>Total</span><strong>{formatMoney(subtotal + fee, currency)}</strong></div>
+            </>
+          ) : (
+            <p className="pt-1 text-sm font-bold">{mode === "zone" ? "Choisissez une zone pour voir les frais." : "Frais de livraison à confirmer avec la pizzeria selon votre adresse."}</p>
+          )}
         </div>
-        {mode === "quote" && <p className="rounded-xl bg-cream-2 p-3 text-sm">Aucun paiement maintenant. Après confirmation des frais, vous aurez le total complet et un lien pour payer.</p>}
+        {mode === "quote" && <p className="rounded-xl bg-cream-2 p-3 text-sm">Le montant ci-dessus est le sous-total des produits, pas un total final : la livraison n'est pas encore comptée.</p>}
         {hasProblems && <p role="alert" className="text-sm font-bold text-tomato">Certains articles ne sont plus disponibles. <Link className="underline" href="/panier">Vérifier le panier</Link></p>}
         {formError && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-bold text-white">{formError}</p>}
         <button type="submit" className="btn btn-primary btn-lg" disabled={pending || loading || hasProblems || !ready}>
-          {pending ? "Envoi en cours…" : mode === "quote" ? "Envoyer ma demande" : "Valider la commande"}
+          {pending ? "Enregistrement…" : "Enregistrer ma commande"}
         </button>
-        <p className="text-center text-xs text-ink-soft">Vous pourrez payer sur la page suivante, une fois le total confirmé.</p>
+        <p className="text-center text-xs text-ink-soft">Ensuite, vous contactez la pizzeria sur WhatsApp pour confirmer la livraison et le paiement.</p>
       </aside>
     </form>
   );

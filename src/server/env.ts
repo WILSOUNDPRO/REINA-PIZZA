@@ -14,6 +14,8 @@ export const env = {
   supabaseAnonKey: () => process.env.SUPABASE_ANON_KEY ?? "",
   supabaseServiceKey: () => process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
   rateLimitSalt: () => process.env.RATE_LIMIT_SALT ?? "dev-only-salt",
+  // Version 1 : aucun paiement en ligne. L'architecture est conservée mais désactivée tant que ce drapeau n'est pas "true".
+  onlinePaymentsEnabled: () => process.env.ONLINE_PAYMENTS_ENABLED === "true",
   paymentProvider: () => (process.env.PAYMENT_PROVIDER ?? "none").toLowerCase(),
   // Les commandes contenant des produits de démonstration ne sont acceptées qu'en développement,
   // sauf demande explicite.
