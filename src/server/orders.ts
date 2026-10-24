@@ -53,6 +53,8 @@ export type OrderItemRow = {
   extras: { id: string; name: string; price_minor: number }[];
   line_total_minor: number;
   is_demo: boolean;
+  image_url?: string | null;
+  default_image?: string | null;
 };
 
 export type OrderEventRow = {
@@ -174,7 +176,9 @@ export async function getOrderByToken(sql: Sql, token: string) {
   if (!/^[A-Za-z0-9_-]{32,64}$/.test(token)) return null;
   const [order] = await sql<OrderRow[]>`select * from orders where access_token = ${token}`;
   if (!order) return null;
-  const items = await sql<OrderItemRow[]>`select * from order_items where order_id = ${order.id} order by position`;
+  // Les visuels viennent du catalogue courant ; noms, descriptions et prix restent ceux de l'achat.
+  const items = await sql<OrderItemRow[]>`select i.*, p.image_url, p.default_image from order_items i left join products p on p.id = i.product_id
+    where i.order_id = ${order.id} order by i.position`;
   return { order, items };
 }
 

@@ -48,6 +48,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/"); await page.waitForLoadState("networkidle"); await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/01-home.png`, fullPage: true, caret: "initial" });
   check("accueil : pas de défilement horizontal", await noScroll(page));
+  check("accueil mobile : visuel principal pepperoni visible, produits accessibles sans long défilement", (await page.locator("section img[alt^='Pizza pepperoni']").first().isVisible()) && (await page.getByRole("heading", { name: "Nos pizzas" }).evaluate((h) => h.getBoundingClientRect().top)) < 1200);
   await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${SHOTS}/02-menu.png`, fullPage: true, caret: "initial" });
   const menu = norm(await page.locator("main").innerText());
@@ -55,8 +56,16 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("menu : plus aucune donnée de démonstration", !/démo/i.test(menu));
   const pep = page.locator("article", { hasText: "Pizza pepperoni" });
   check("menu : tailles M à XXL désactivées « Prix à venir »", (await pep.locator("[aria-disabled=true]").count()) === 4 && (await pep.getByRole("radio").count()) === 1);
-    check("menu : pas de défilement horizontal", await noScroll(page));
-  check("menu : hareng saur sans fausse photo (emplacement discret < 120 px)", (await page.locator("article", { hasText: "Pizza hareng saur" }).locator("div[role=img]").count()) === 1 && (await page.locator("article div[role=img]").first().evaluate((e) => e.getBoundingClientRect().height)) < 120);
+  for (const [name, slug] of [["Pizza pepperoni", "pepperoni"], ["Pizza jambon", "jambon"], ["Pizza hareng saur", "hareng-saur"]]) {
+    const card = page.locator("article", { hasText: name });
+    await card.scrollIntoViewIfNeeded();
+    await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
+    const info = await card.locator("img").first().evaluate((i) => ({ src: i.currentSrc, set: i.srcset, w: i.getAttribute("width"), h: i.getAttribute("height"), nat: [i.naturalWidth, i.naturalHeight], box: i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height, fit: getComputedStyle(i).objectFit, alt: i.alt }));
+    check(`menu : ${name} → ${slug}-*.webp, srcset 480/800/1200, 4:3, object-cover, dimensions réservées`, info.src.includes(`/images/pizzas/${slug}-`) && info.src.endsWith(".webp") && /480w.*800w.*1200w/.test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === "1200" && info.h === "900" && info.nat[0] > 0 && info.alt.includes(name), JSON.stringify(info));
+    check(`menu : ${name} affiche discrètement « Photo d'illustration »`, (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1);
+  }
+  check("menu : plus aucun bloc « photo à venir »", (await page.locator("article div[role=img]").count()) === 0);
+  check("menu : pas de défilement horizontal", await noScroll(page));
 
   // 2. Panier
   await addPizza(page, "Pizza pepperoni", 2);
@@ -66,6 +75,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/panier"); await page.getByText("Sous-total des produits").first().waitFor();
   check("panier : 2 × 1 500 HTG = 3 000 HTG", norm(await page.locator("main").innerText()).includes("3 000 HTG"));
   await page.screenshot({ path: `${SHOTS}/03-cart.png`, fullPage: true, caret: "initial" });
+  check("panier : miniature = illustration du pepperoni", (await page.locator("article img").first().getAttribute("src")).includes("/images/pizzas/pepperoni-"));
 
   // 3. Formulaire sans zone tarifée : frais à confirmer, sous-total non présenté comme total
   await page.getByRole("link", { name: "Renseigner ma livraison" }).click();
@@ -218,6 +228,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await submitOrder(page);
   const zr = norm(await page.locator("main").innerText());
   check("zone tarifée : commande enregistrée avec total", zr.includes("Total") && zr.includes("1 500 HTG"));
+  check("confirmation : miniatures des articles", (await page.locator("section[aria-labelledby=articles] img").count()) >= 1);
   const wz = decodeURIComponent((await page.getByRole("link", { name: "Confirmer la livraison sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
   check("zone tarifée : message avec Total", norm(wz).includes("Livraison : 250 HTG\nTotal : 1 500 HTG"));
   psql("delete from delivery_zones where name = 'Zone test e2e'");
@@ -230,6 +241,13 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("admin réglages : moyens de paiement et devise HTG", (await ap.getByText("Moyens de paiement proposés au client").isVisible()) && (await ap.locator("select[name=currency]").inputValue()) === "HTG");
   await ap.screenshot({ path: `${SHOTS}/13-admin-settings.png`, fullPage: true, caret: "initial" });
 
+
+  // 11b. La photo ajoutée par l'administrateur prime sur l'illustration par défaut
+  psql("update products set image_url = 'http://localhost:54321/storage/v1/object/public/menu-images/test-admin.webp' where name = 'Pizza pepperoni'");
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  const pc = page.locator("article", { hasText: "Pizza pepperoni" });
+  check("photo admin : remplace l'illustration (pas de badge, source Supabase)", (await pc.locator("img").first().getAttribute("src")).includes("menu-images") && (await pc.getByText("Photo d'illustration").count()) === 0);
+  psql("update products set image_url = null where name = 'Pizza pepperoni'");
 
   // 12. Photo réelle : téléversement admin, cadrage 4:3 uniforme, hero
   const sharp = require("sharp");
@@ -247,7 +265,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const dp = await dctx.newPage();
   await dp.goto(BASE + "/"); await dp.waitForLoadState("networkidle");
-  check("accueil desktop : photo réelle en hero quand elle existe", (await dp.locator("section img[alt='']").count()) >= 1);
+  check("accueil desktop : visuel principal = pepperoni (1200 px, prioritaire), badge illustration", (await dp.locator("section img[alt^='Pizza pepperoni']").first().evaluate((i) => i.currentSrc.includes("pepperoni-1200") || i.currentSrc.includes("pepperoni-800")) ) && (await dp.locator("section img[alt^='Pizza pepperoni']").first().getAttribute("fetchpriority")) === "high" && (await dp.getByText("Photo d'illustration", { exact: true }).count()) >= 4);
   await dctx.close();
   await ap.goto(`${BASE}/admin/menu`);
   ap.once("dialog", (d) => d.accept());

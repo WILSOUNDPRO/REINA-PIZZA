@@ -5,6 +5,7 @@ import { getSql } from "@/server/db";
 import { getSettings } from "@/server/settings";
 import { getPublicCatalog } from "@/server/catalog";
 import { ProductImage } from "@/components/ProductCard";
+import { defaultImageSrc, defaultImageSrcSet, ILLUSTRATION_LABEL } from "@/lib/productImage";
 import { LogoSymbol } from "@/components/Logo";
 import { waLink } from "@/lib/whatsapp";
 import { formatMoney } from "@/lib/money";
@@ -13,9 +14,10 @@ import { normalizePhone } from "@/lib/phone";
 export default async function Home() {
   const sql = getSql();
   const [s, { products }] = await Promise.all([getSettings(sql), getPublicCatalog(sql)]);
-  const heroPhoto = products.find((p) => p.image_url)?.image_url ?? null; // uniquement une photo réellement téléversée
+  // Visuel principal : le pepperoni (photo de l'administrateur si elle existe, sinon l'illustration par défaut).
+  const hero = products.find((p) => p.default_image === "pepperoni") ?? products.find((p) => p.image_url || p.default_image) ?? null;
   const tel = normalizePhone(s.phone) ?? `+${s.whatsapp_number}`;
-  const localHero = heroPhoto ? /^https?:\/\/(localhost|127\.0\.0\.1)/.test(heroPhoto) : false;
+  const localHero = hero?.image_url ? /^https?:\/\/(localhost|127\.0\.0\.1)/.test(hero.image_url) : false;
 
   return (
     <>
@@ -31,10 +33,16 @@ export default async function Home() {
           <p className="mt-4 flex items-start gap-2 text-sm text-basil"><MessageCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" /><span>Livraison et paiement à confirmer avec la pizzeria sur WhatsApp.</span></p>
           {s.orders_paused && <p role="alert" className="mt-4 rounded-xl bg-tomato p-3 font-semibold text-white">{s.pause_message || "Les commandes sont temporairement suspendues."}</p>}
         </div>
-        {/* Photo réelle si elle existe, sinon un panneau d'informations : jamais une fausse photo ni une illustration générique. */}
-        {heroPhoto ? (
-          <div className="relative hidden aspect-[4/3] overflow-hidden rounded-2xl border border-line md:block">
-            <Image src={heroPhoto} alt="" fill priority sizes="(min-width: 768px) 50vw, 0px" quality={80} unoptimized={localHero} className="object-cover" />
+        {hero ? (
+          <div className="relative aspect-[16/10] overflow-hidden rounded-2xl border border-line bg-cream-2 md:aspect-[4/3]">
+            {hero.image_url ? (
+              <Image src={hero.image_url} alt={hero.name} fill priority sizes="(min-width: 768px) 50vw, 100vw" quality={80} unoptimized={localHero} className="object-cover" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={defaultImageSrc(hero.default_image!, 1200)} srcSet={defaultImageSrcSet(hero.default_image!)} sizes="(min-width: 768px) 50vw, 100vw" width={1200} height={900}
+                alt={`${hero.name} — ${ILLUSTRATION_LABEL.toLowerCase()}`} fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
+            )}
+            {!hero.image_url && <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">{ILLUSTRATION_LABEL}</span>}
           </div>
         ) : (
           <div className="card relative hidden overflow-hidden p-8 md:block">
@@ -54,9 +62,9 @@ export default async function Home() {
           <Link href="/menu" className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-tomato">Voir tout le menu<ArrowRight size={16} aria-hidden="true" /></Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          {products.map((p, i) => (
+          {products.map((p) => (
             <Link key={p.id} href={`/menu#p-${p.id}`} className="card group flex flex-col overflow-hidden transition-shadow hover:shadow-md" aria-label={`Choisir ${p.name}`}>
-              <ProductImage url={p.image_url} name={p.name} className={p.image_url ? "aspect-[4/3] w-full" : "h-24 w-full"} priority={i === 0 && !!p.image_url} />
+              <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, 380px" />
               <div className="flex items-end justify-between gap-3 p-4">
                 <div><h3 className="text-lg font-extrabold">{p.name}</h3><p className="text-sm text-ink-soft">Taille {p.sizes[0].size}</p><p className="mt-1 text-lg font-extrabold text-tomato">{formatMoney(p.sizes[0].price_minor, s.currency)}</p></div>
                 <span className="btn btn-primary !min-h-11 !px-4 group-hover:bg-tomato-dark">Choisir</span>

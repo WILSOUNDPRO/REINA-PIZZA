@@ -41,7 +41,7 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
         ))}
         {lines.map((l) => (
           <article key={l.key} className="card flex gap-3 p-3 sm:p-4">
-            <ProductImage url={l.imageUrl} name={l.productName} className="h-20 w-20 shrink-0 rounded-xl sm:h-24 sm:w-24" sizes="96px" />
+            <ProductImage url={l.imageUrl} defaultImage={l.defaultImage} name={l.productName} className="h-[60px] w-20 shrink-0 rounded-xl sm:h-[72px] sm:w-24" sizes="96px" showBadge={false} />
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <h2 className="text-base font-extrabold leading-tight sm:text-lg">{l.productName}</h2>

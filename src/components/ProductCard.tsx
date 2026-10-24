@@ -6,6 +6,7 @@ import { Check, Minus, Plus } from "lucide-react";
 import { useCart } from "./CartProvider";
 import { LogoSymbol } from "./Logo";
 import { formatMoney } from "@/lib/money";
+import { defaultImageSrc, defaultImageSrcSet, ILLUSTRATION_LABEL } from "@/lib/productImage";
 import { SIZE_HINT } from "@/lib/labels";
 import { MAX_LINE_QUANTITY, SIZES, type Currency, type Size } from "@/lib/constants";
 import type { CatalogExtra, CatalogProduct } from "@/server/catalog";
@@ -16,13 +17,25 @@ function isLocalHost(url: string) {
 
 /**
  * Cadrage uniforme : le conteneur impose le format (la classe reçue fixe la taille), l'image est recadrée (object-cover) sans déformation.
- * Sans photo : un emplacement discret avec le symbole de la marque, sans fausse photo.
+ * Priorité : photo de l'administrateur > illustration par défaut (badge « Photo d'illustration ») > emplacement discret.
  */
-export function ProductImage({ url, name, className = "", sizes = "(max-width: 640px) 100vw, 400px", priority = false }: { url: string | null; name: string; className?: string; sizes?: string; priority?: boolean }) {
+export function ProductImage({ url, defaultImage, name, className = "", sizes = "(max-width: 640px) 100vw, 400px", priority = false, showBadge = true }: { url: string | null; defaultImage?: string | null; name: string; className?: string; sizes?: string; priority?: boolean; showBadge?: boolean }) {
   if (url) {
     return (
       <div className={`relative overflow-hidden bg-cream-2 ${className}`}>
         <Image src={url} alt={name} fill sizes={sizes} priority={priority} quality={80} unoptimized={isLocalHost(url)} className="object-cover" />
+      </div>
+    );
+  }
+  if (defaultImage) {
+    return (
+      <div className={`relative overflow-hidden bg-cream-2 ${className}`}>
+        {/* WebP 480/800/1200 en 4:3 ; dimensions réservées pour éviter tout décalage de mise en page. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={defaultImageSrc(defaultImage, 800)} srcSet={defaultImageSrcSet(defaultImage)} sizes={sizes} width={1200} height={900}
+          alt={`${name} — ${ILLUSTRATION_LABEL.toLowerCase()}`} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : undefined} decoding="async"
+          className="absolute inset-0 h-full w-full object-cover" />
+        {showBadge && <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium leading-tight text-white">{ILLUSTRATION_LABEL}</span>}
       </div>
     );
   }
@@ -52,7 +65,7 @@ export function ProductCard({ p, extras, currency, orderable }: { p: CatalogProd
 
   return (
     <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
-      <ProductImage url={p.image_url} name={p.name} className={p.image_url ? "aspect-[4/3] w-full" : "h-24 w-full"} />
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <h3 className="text-xl font-extrabold">{p.name}</h3>

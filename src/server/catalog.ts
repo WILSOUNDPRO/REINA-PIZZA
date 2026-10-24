@@ -7,6 +7,7 @@ export type CatalogProduct = {
   name: string;
   description: string;
   image_url: string | null;
+  default_image: string | null;
   is_demo: boolean;
   category_id: string | null;
   category_name: string | null;
@@ -19,7 +20,7 @@ const SIZE_ORDER = "array['S','M','L','XL','XXL']";
 /** Produits visibles côté client : disponibles, avec au moins une taille disponible. */
 export async function getPublicCatalog(sql: Sql) {
   const products = await sql<CatalogProduct[]>`
-    select p.id, p.name, p.description, p.image_url, p.is_demo, p.category_id, c.name as category_name,
+    select p.id, p.name, p.description, p.image_url, p.default_image, p.is_demo, p.category_id, c.name as category_name,
       coalesce((select json_agg(json_build_object('size', s.size, 'price_minor', s.price_minor)
           order by array_position(${sql.unsafe(SIZE_ORDER)}, s.size))
         from product_sizes s where s.product_id = p.id and s.available), '[]'::json) as sizes

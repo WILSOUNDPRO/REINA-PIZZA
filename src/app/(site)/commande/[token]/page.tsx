@@ -11,6 +11,7 @@ import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
 import { locationHref } from "@/lib/location";
 import { buildOrderMessage, waLink } from "@/lib/whatsapp";
 import { PAYMENT_STATUS_LABELS } from "@/lib/labels";
+import { ProductImage } from "@/components/ProductCard";
 import { OrderMessageActions } from "@/components/OrderMessageActions";
 import { Logo } from "@/components/Logo";
 import { PrintButton } from "@/components/PrintButton";
@@ -61,13 +62,14 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
         <h2 id="articles" className="mb-3 text-2xl font-bold">Articles</h2>
         <ul className="divide-y divide-line">
           {items.map((i) => (
-            <li key={i.id} className="flex justify-between gap-3 py-2">
-              <span>
+            <li key={i.id} className="flex items-center gap-3 py-2">
+              <ProductImage url={i.image_url ?? null} defaultImage={i.default_image} name={i.product_name} className="h-[54px] w-[72px] shrink-0 rounded-lg" sizes="72px" showBadge={false} />
+              <span className="min-w-0 flex-1">
                 <strong>{i.quantity} × {i.product_name}</strong> <span className="text-ink-soft">(taille {i.size})</span>
                 {i.extras.length > 0 && <span className="block text-sm text-ink-soft">+ {i.extras.map((e) => e.name).join(", ")}</span>}
                 <span className="block text-xs text-ink-soft">{money(i.unit_price_minor)} l'unité</span>
               </span>
-              <span className="font-semibold">{money(i.line_total_minor)}</span>
+              <span className="shrink-0 font-semibold">{money(i.line_total_minor)}</span>
             </li>
           ))}
         </ul>

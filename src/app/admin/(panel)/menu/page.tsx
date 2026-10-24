@@ -12,8 +12,8 @@ export default async function AdminMenu({ searchParams }: { searchParams: Promis
   const [settings, cats, products] = await Promise.all([
     getSettings(sql),
     sql<{ id: string; name: string; position: number; active: boolean }[]>`select * from categories order by position, name`,
-    sql<{ id: string; name: string; available: boolean; is_demo: boolean; image_url: string | null; category_name: string | null; sizes: { size: string; price_minor: number }[] }[]>`
-      select p.id, p.name, p.available, p.is_demo, p.image_url, c.name as category_name,
+    sql<{ id: string; name: string; available: boolean; is_demo: boolean; image_url: string | null; default_image: string | null; category_name: string | null; sizes: { size: string; price_minor: number }[] }[]>`
+      select p.id, p.name, p.available, p.is_demo, p.image_url, p.default_image, c.name as category_name,
         coalesce((select json_agg(json_build_object('size', s.size, 'price_minor', s.price_minor) order by array_position(array['S','M','L','XL','XXL'], s.size))
           from product_sizes s where s.product_id = p.id and s.available), '[]'::json) as sizes
       from products p left join categories c on c.id = p.category_id order by coalesce(c.position, 9999), p.position, p.name`,
@@ -37,7 +37,7 @@ export default async function AdminMenu({ searchParams }: { searchParams: Promis
         {products.map((p) => (
           <li key={p.id} className="card flex flex-wrap items-center gap-3 p-4">
             <div className="min-w-0 flex-1">
-              <p className="font-bold">{p.name} {p.is_demo && <span className="badge bg-cream-2 text-ink-soft">Démo</span>} {!p.available && <span className="badge bg-stone-200">Indisponible</span>} {!p.image_url && <span className="badge bg-cream-2 text-ink-soft">Sans photo</span>}</p>
+              <p className="font-bold">{p.name} {p.is_demo && <span className="badge bg-cream-2 text-ink-soft">Démo</span>} {!p.available && <span className="badge bg-stone-200">Indisponible</span>} {!p.image_url && (p.default_image ? <span className="badge bg-cream-2 text-ink-soft">Illustration par défaut</span> : <span className="badge bg-cream-2 text-ink-soft">Sans photo</span>)}</p>
               <p className="text-sm text-ink-soft">{p.category_name ?? "Sans catégorie"} · {p.sizes.length ? p.sizes.map((s) => `${s.size} ${formatMoney(s.price_minor, settings.currency)}`).join(" · ") : "Aucune taille"}</p>
             </div>
             <div className="flex flex-wrap gap-2">

@@ -10,7 +10,7 @@ import { saveProductAction } from "../../../actions";
 import { Flash } from "@/components/admin/Flash";
 import { SubmitButton } from "@/components/admin/SubmitButton";
 
-type P = { id: string; name: string; description: string; image_url: string | null; available: boolean; position: number; is_demo: boolean; category_id: string | null };
+type P = { default_image: string | null; id: string; name: string; description: string; image_url: string | null; available: boolean; position: number; is_demo: boolean; category_id: string | null };
 
 export default async function ProductForm({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ ok?: string; err?: string }> }) {
   const { id } = await params;
@@ -21,7 +21,7 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
   let sizes: { size: string; price_minor: number; available: boolean }[] = [];
   if (!isNew) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-    [p] = await sql<P[]>`select id, name, description, image_url, available, position, is_demo, category_id from products where id = ${id}`;
+    [p] = await sql<P[]>`select default_image, id, name, description, image_url, available, position, is_demo, category_id from products where id = ${id}`;
     if (!p) notFound();
     sizes = await sql`select size, price_minor, available from product_sizes where product_id = ${id}`;
   }
@@ -55,6 +55,7 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
 
         <div className="space-y-2">
           <p className="text-sm font-bold">Photo</p>
+          {p?.default_image && <p className="text-xs text-ink-soft">{p.image_url ? "Votre photo remplace l'illustration par défaut. Retirez-la pour revenir à l'illustration." : "Une photo d'illustration est affichée par défaut. Ajoutez votre photo pour la remplacer."}</p>}
           {p?.image_url && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}

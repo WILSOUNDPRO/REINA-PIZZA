@@ -434,6 +434,35 @@ describe("migration catalogue réel (idempotente)", () => {
   });
 });
 
+describe("visuels par défaut", () => {
+  const m3 = fs.readFileSync("supabase/migrations/20260103000000_default_product_images.sql", "utf8");
+  it("associe l'illustration au bon produit, sans écraser une valeur existante, de façon idempotente", async () => {
+    await sql`truncate products, categories, extras, delivery_zones cascade`;
+    await sql.unsafe(fs.readFileSync("supabase/migrations/20260102000000_offline_payment_real_catalog.sql", "utf8"));
+    await sql`update products set default_image = 'perso' where name = 'Pizza jambon'`;
+    await sql.unsafe(m3);
+    await sql.unsafe(m3);
+    const rows = await sql`select name, default_image, description from products order by position`;
+    expect(rows.map((r) => [r.name, r.default_image])).toEqual([["Pizza pepperoni", "pepperoni"], ["Pizza jambon", "perso"], ["Pizza hareng saur", "hareng-saur"]]);
+    expect(rows.every((r) => r.description === "")).toBe(true); // aucune description inventée
+  });
+  it("les fichiers par défaut existent (original PNG + WebP 480/800/1200) pour chaque produit", () => {
+    for (const slug of ["pepperoni", "jambon", "hareng-saur"]) {
+      expect(fs.existsSync(`public/images/pizzas/${slug}.png`), slug + ".png").toBe(true);
+      for (const w of [480, 800, 1200]) expect(fs.existsSync(`public/images/pizzas/${slug}-${w}.webp`), `${slug}-${w}.webp`).toBe(true);
+    }
+  });
+  it("le panier chiffré côté serveur expose l'illustration, et l'image de l'admin prime", async () => {
+    await sql`update products set default_image = 'pepperoni' where id = ${IDS.pizzaA}`;
+    const { priceCart } = await import("@/server/pricing");
+    let c = await priceCart(sql, [{ productId: IDS.pizzaA, size: "S", quantity: 1, extraIds: [] }]);
+    expect(c.lines[0]).toMatchObject({ imageUrl: null, defaultImage: "pepperoni" });
+    await sql`update products set image_url = 'https://exemple.test/photo.webp' where id = ${IDS.pizzaA}`;
+    c = await priceCart(sql, [{ productId: IDS.pizzaA, size: "S", quantity: 1, extraIds: [] }]);
+    expect(c.lines[0]).toMatchObject({ imageUrl: "https://exemple.test/photo.webp", defaultImage: "pepperoni" });
+  });
+});
+
 describe("tailles sans prix", () => {
   it("la commande est impossible pour une taille sans prix réel, même en forçant la requête", async () => {
     await sql`delete from product_sizes where product_id = ${IDS.pizzaA} and size = 'M'`;

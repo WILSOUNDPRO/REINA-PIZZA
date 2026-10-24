@@ -9,6 +9,7 @@ export type ServerLine = {
   productId: string;
   productName: string;
   imageUrl: string | null;
+  defaultImage: string | null;
   size: Size;
   quantity: number;
   unitPriceMinor: number;

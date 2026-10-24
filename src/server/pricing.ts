@@ -8,6 +8,7 @@ export type PricedLine = {
   productName: string;
   productDescription: string;
   imageUrl: string | null;
+  defaultImage: string | null;
   size: Size;
   quantity: number;
   unitPriceMinor: number; // prix de la taille + suppléments
@@ -34,8 +35,8 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
   const productIds = [...new Set([...merged.values()].map((i) => i.productId))];
   const extraIds = [...new Set([...merged.values()].flatMap((i) => i.extraIds))];
 
-  const products = await sql<{ id: string; name: string; description: string; image_url: string | null; is_demo: boolean; available: boolean; cat_active: boolean | null }[]>`
-    select p.id, p.name, p.description, p.image_url, p.is_demo, p.available, c.active as cat_active
+  const products = await sql<{ id: string; name: string; description: string; image_url: string | null; default_image: string | null; is_demo: boolean; available: boolean; cat_active: boolean | null }[]>`
+    select p.id, p.name, p.description, p.image_url, p.default_image, p.is_demo, p.available, c.active as cat_active
     from products p left join categories c on c.id = p.category_id where p.id in ${sql(productIds)}`;
   const sizes = await sql<{ product_id: string; size: Size; price_minor: number; available: boolean }[]>`
     select product_id, size, price_minor, available from product_sizes where product_id in ${sql(productIds)}`;
@@ -70,6 +71,7 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
       productName: p.name,
       productDescription: p.description,
       imageUrl: p.image_url,
+      defaultImage: p.default_image,
       size: it.size,
       quantity: it.quantity,
       unitPriceMinor: unit,
