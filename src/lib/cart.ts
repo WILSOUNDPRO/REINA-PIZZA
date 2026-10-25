@@ -1,6 +1,7 @@
 import type { Size } from "./constants";
 
-export type CartItem = { productId: string; size: Size; quantity: number; extraIds: string[] };
+// Pizza : taille obligatoire. Autres produits : pas de taille ; variante facultative.
+export type CartItem = { productId: string; size?: Size; variantId?: string; quantity: number; extraIds: string[] };
 
-export const lineKey = (i: Pick<CartItem, "productId" | "size" | "extraIds">) =>
-  `${i.productId}:${i.size}:${[...i.extraIds].sort().join(",")}`;
+export const lineKey = (i: Pick<CartItem, "productId" | "size" | "variantId" | "extraIds">) =>
+  `${i.productId}:${i.size ?? ""}:${i.variantId ?? ""}:${[...i.extraIds].sort().join(",")}`;

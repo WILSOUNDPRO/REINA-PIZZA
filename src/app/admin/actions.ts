@@ -6,7 +6,7 @@ import { getSql } from "@/server/db";
 import { requireAdmin, passwordLogin, setSessionCookies, clearSession } from "@/server/admin/auth";
 import { uploadMenuImage } from "@/server/admin/storage";
 import { setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
-import { deleteProduct } from "@/server/menu";
+import { deleteProduct, saveProduct } from "@/server/menu";
 import { deleteMethod, saveMethod } from "@/server/paymentMethods";
 import { allow, clientKey } from "@/server/ratelimit";
 import { bool, int, money, str } from "@/server/admin/money-input";
@@ -107,26 +107,9 @@ export async function deleteCategoryAction(formData: FormData) {
 
 export async function saveProductAction(formData: FormData) {
   await requireAdmin();
-  const sql = getSql();
   const id = str(formData, "id");
   const editing = isUuid(id);
   const path = editing ? `/admin/menu/${id}` : "/admin/menu/nouveau";
-  const name = str(formData, "name");
-  const description = str(formData, "description");
-  const categoryId = str(formData, "categoryId");
-  if (!name || name.length > 120) back(path, "Le nom est obligatoire (120 caractères max).", false);
-  if (description.length > 1000) back(path, "Description trop longue (1000 caractères max).", false);
-
-  const sizes: { size: string; price: number }[] = [];
-  const offered: string[] = [];
-  for (const s of SIZES) {
-    if (!bool(formData, `size_${s}_on`)) continue;
-    const price = money(formData, `size_${s}_price`);
-    if (price === null || price <= 0) back(path, `Prix invalide pour la taille ${s} (strictement supérieur à 0).`, false);
-    sizes.push({ size: s, price });
-    offered.push(s);
-  }
-  if (bool(formData, "available") && sizes.length === 0) back(path, "Un produit disponible doit avoir au moins une taille avec un prix.", false);
 
   let imageUrl: string | null | undefined;
   const file = formData.get("image");
@@ -138,26 +121,27 @@ export async function saveProductAction(formData: FormData) {
     imageUrl = null;
   }
 
-  const cat = isUuid(categoryId) ? categoryId : null;
-  const productId = await sql.begin(async (tx) => {
-    let pid = id;
-    if (editing) {
-      await tx`update products set name = ${name}, description = ${description}, category_id = ${cat}, available = ${bool(formData, "available")},
-        position = ${int(formData, "position")}, is_demo = ${bool(formData, "isDemo")} ${imageUrl !== undefined ? tx`, image_url = ${imageUrl}` : tx``} where id = ${id}`;
-    } else {
-      const [p] = await tx<{ id: string }[]>`insert into products (name, description, category_id, available, position, is_demo, image_url)
-        values (${name}, ${description}, ${cat}, ${bool(formData, "available")}, ${int(formData, "position")}, ${bool(formData, "isDemo")}, ${imageUrl ?? null}) returning id`;
-      pid = p.id;
-    }
-    for (const s of sizes) {
-      await tx`insert into product_sizes (product_id, size, price_minor, available) values (${pid}, ${s.size}, ${s.price}, true)
-        on conflict (product_id, size) do update set price_minor = excluded.price_minor, available = true`;
-    }
-    // Les tailles décochées ne sont plus proposées (le prix est conservé si on les réactive).
-    await tx`update product_sizes set available = false where product_id = ${pid} ${offered.length ? tx`and size not in ${tx(offered)}` : tx``}`;
-    return pid;
+  const variants = Array.from({ length: 8 }, (_, k) => ({ label: str(formData, `variant_${k}_label`), price: str(formData, `variant_${k}_price`), pieces: str(formData, `variant_${k}_pieces`) }));
+  const r = await saveProduct(getSql(), {
+    id: editing ? id : undefined,
+    name: str(formData, "name"),
+    description: str(formData, "description"),
+    ingredients: String(formData.get("ingredients") ?? ""),
+    categoryId: str(formData, "categoryId"),
+    productType: str(formData, "productType") === "other" ? "other" : "pizza",
+    position: int(formData, "position"),
+    available: bool(formData, "available"),
+    visible: formData.has("visibleField") ? bool(formData, "visible") : true,
+    isDemo: bool(formData, "isDemo"),
+    imageUrl,
+    sizes: Object.fromEntries(SIZES.map((s) => [s, bool(formData, `size_${s}_on`) ? str(formData, `size_${s}_price`) : ""])),
+    basePrice: str(formData, "basePrice"),
+    saleUnit: str(formData, "saleUnit"),
+    pieces: str(formData, "pieces"),
+    variants,
   });
-  back(`/admin/menu/${productId}`, "Produit enregistré.");
+  if (!r.ok) back(path, r.message, false);
+  back(`/admin/menu/${r.data!.id}`, "Produit enregistré.");
 }
 
 export async function deleteProductAction(formData: FormData) {

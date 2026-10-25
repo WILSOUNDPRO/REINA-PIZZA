@@ -341,3 +341,82 @@ alter table payment_methods add column if not exists recipient_name text check (
 -- MonCash est accepté. Le numéro de réception n'est PAS supposé identique au numéro de contact de Reina Pizza :
 -- il reste vide, à compléter par l'administrateur (Administration → Moyens de paiement).
 insert into payment_methods (label, enabled, position) values ('MonCash', true, 1) on conflict (label) do nothing;
+
+-- ═════════ 20260106000000_non_pizza_products.sql ═════════
+-- Produits hors pizzas (Burger, Wings) : prix, unité de vente et variantes facultatives, configurés dans l'administration.
+-- Aucun prix, aucune portion, aucune recette n'est inventé : les produits sont créés NON configurés et s'affichent « Bientôt disponible ».
+-- Idempotent : n'ajoute aucun doublon et n'écrase aucune saisie.
+alter table products add column if not exists product_type text not null default 'pizza' check (product_type in ('pizza', 'other'));
+-- Unité de vente d'un produit « other » : à l'unité ou par portion. NULL = non configurée. (Les pizzas se vendent par taille S–XXL.)
+alter table products add column if not exists sale_unit text check (sale_unit in ('unit', 'portion'));
+alter table products add column if not exists base_price_minor int check (base_price_minor > 0);
+alter table products add column if not exists pieces_per_portion int check (pieces_per_portion between 1 and 200);
+alter table products add column if not exists ingredients text check (ingredients is null or length(ingredients) <= 1000);
+-- visible : affiché au catalogue ; available : commandable (activation par l'administrateur).
+alter table products add column if not exists visible boolean not null default true;
+
+create table if not exists product_variants (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references products(id) on delete cascade,
+  label text not null check (length(label) between 1 and 40),
+  price_minor int not null check (price_minor > 0),
+  position int not null default 0,
+  available boolean not null default true,
+  unique (product_id, label)
+);
+alter table product_variants enable row level security;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then revoke all on product_variants from anon; end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then revoke all on product_variants from authenticated; end if;
+end $$;
+
+-- Lignes de commande : une taille n'existe que pour les pizzas. option_label = instantané de l'unité / variante des autres produits.
+alter table order_items alter column size drop not null;
+alter table order_items add column if not exists option_label text;
+
+insert into categories (name, position) select 'Burgers', 2 where not exists (select 1 from categories where lower(name) = 'burgers');
+insert into categories (name, position) select 'Wings', 3 where not exists (select 1 from categories where lower(name) = 'wings');
+
+-- Non configurés (sans prix ni unité), non commandables (available = false), avec leur illustration par défaut.
+insert into products (category_id, name, description, position, product_type, available, default_image, is_demo)
+select (select id from categories where lower(name) = 'burgers' order by position limit 1), 'Burger', '', 10, 'other', false, 'burger', false
+where not exists (select 1 from products where lower(name) in ('burger', 'burger + frites') or default_image in ('burger', 'burger-frites'));
+insert into products (category_id, name, description, position, product_type, available, default_image, is_demo)
+select (select id from categories where lower(name) = 'wings' order by position limit 1), 'Wings', '', 11, 'other', false, 'wings', false
+where not exists (select 1 from products where lower(name) in ('wings', 'wings bbq') or default_image = 'wings');
+
+-- ═════════ 20260107000000_burger_frites_wings_bbq.sql ═════════
+-- Prix et portions confirmés : « Burger + frites » (1 250 HTG) et « Wings BBQ » (6 pièces : 600 HTG, 12 pièces : 1 200 HTG).
+-- Idempotente et non destructive :
+--  * ne touche qu'aux produits encore non configurés (ni prix, ni unité, ni variante) : une fois configurés, l'administrateur garde la main ;
+--  * ne renomme que les noms d'origine (« Burger », « Wings ») ; ne remplace jamais une description, un prix ou une photo saisis dans l'administration ;
+--  * ne crée aucun produit : les anciennes commandes (instantanés de nom, prix et option) ne changent pas.
+
+-- Nombre de pièces propre à une variante (portion de 6 ou 12 pièces).
+alter table product_variants add column if not exists pieces int check (pieces is null or pieces between 1 and 200);
+
+-- Nouvelle illustration du burger (burger + frites) ; la photo téléversée par l'administrateur (image_url) reste prioritaire.
+update products set default_image = 'burger-frites' where product_type = 'other' and default_image = 'burger';
+
+-- Burger + frites : un burger accompagné de frites incluses, boisson non incluse.
+update products set
+  name = case when name = 'Burger' then 'Burger + frites' else name end,
+  description = case when description = '' then 'Un burger accompagné de frites, incluses dans le prix. Boisson non incluse.' else description end,
+  sale_unit = 'unit', base_price_minor = 125000, available = true
+where product_type = 'other' and default_image = 'burger-frites' and sale_unit is null and base_price_minor is null
+  and not exists (select 1 from product_variants v where v.product_id = products.id);
+
+-- Wings BBQ : vente par portion, choix obligatoire entre 6 et 12 pièces (aucun prix de base, aucune frite ni boisson).
+with w as (
+  update products set
+    name = case when name = 'Wings' then 'Wings BBQ' else name end,
+    description = case when description = '' then 'Wings barbecue (BBQ), vendus par portion de 6 ou 12 pièces.' else description end,
+    sale_unit = 'portion', available = true
+  where product_type = 'other' and default_image = 'wings' and sale_unit is null and base_price_minor is null
+    and not exists (select 1 from product_variants v where v.product_id = products.id)
+  returning id
+)
+insert into product_variants (product_id, label, price_minor, position, available, pieces)
+select w.id, v.label, v.price_minor, v.position, true, v.pieces
+from w cross join (values ('6 pièces', 60000, 0, 6), ('12 pièces', 120000, 1, 12)) as v(label, price_minor, position, pieces)
+on conflict (product_id, label) do nothing;

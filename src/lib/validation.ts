@@ -54,7 +54,8 @@ const optionalPhone = (label: string) =>
 
 export const cartItemSchema = z.object({
   productId: z.guid(),
-  size: z.enum(SIZES),
+  size: z.enum(SIZES).optional(),
+  variantId: z.guid().optional(),
   quantity: z.number().int().min(1).max(MAX_LINE_QUANTITY),
   extraIds: z.array(z.guid()).max(10).default([]),
 });

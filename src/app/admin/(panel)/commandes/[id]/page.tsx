@@ -6,6 +6,7 @@ import { getSettings } from "@/server/settings";
 import { env } from "@/server/env";
 import { allowedNextStatuses, EVENT_LABELS, MANUAL_PAYMENT_STATUSES, ORDER_STATUS_LABELS, PAYMENT_STATUS_LABELS, type OrderStatus, type PaymentStatus } from "@/lib/labels";
 import { formatMoney, minorToInput } from "@/lib/money";
+import { lineOption } from "@/lib/productSale";
 import { formatDateTime } from "@/lib/time";
 import { formatPhoneDisplay, phoneToWaDigits } from "@/lib/phone";
 import { locationHref } from "@/lib/location";
@@ -142,7 +143,7 @@ export default async function OrderDetail({ params, searchParams }: { params: Pr
         <ul className="divide-y divide-line">
           {items.map((i) => (
             <li key={i.id} className="flex justify-between gap-3 py-2 text-sm">
-              <span><strong>{i.quantity} × {i.product_name}</strong> ({i.size}){i.is_demo && <span className="badge ml-1 bg-cream-2">démo</span>}{i.extras.length > 0 && <span className="block text-ink-soft">+ {i.extras.map((e) => `${e.name} (${money(e.price_minor)})`).join(", ")}</span>}<span className="block text-xs text-ink-soft">{money(i.unit_price_minor)} l'unité</span></span>
+              <span><strong>{i.quantity} × {i.product_name}</strong>{lineOption(i) ? ` (${lineOption(i)})` : ""}{i.is_demo && <span className="badge ml-1 bg-cream-2">démo</span>}{i.extras.length > 0 && <span className="block text-ink-soft">+ {i.extras.map((e) => `${e.name} (${money(e.price_minor)})`).join(", ")}</span>}<span className="block text-xs text-ink-soft">{money(i.unit_price_minor)} l'unité</span></span>
               <span className="font-semibold">{money(i.line_total_minor)}</span>
             </li>
           ))}

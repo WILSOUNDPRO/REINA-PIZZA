@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { defaultImageSrc, defaultImageSrcSet, ILLUSTRATION_LABEL } from "@/lib/productImage";
 import { SIZE_HINT } from "@/lib/labels";
 import { MAX_LINE_QUANTITY, SIZES, type Currency, type Size } from "@/lib/constants";
+import { minPriceMinor, unitLabel, variantOptionLabel, variantRequired } from "@/lib/productSale";
 import type { CatalogExtra, CatalogProduct } from "@/server/catalog";
 
 function isLocalHost(url: string) {
@@ -46,7 +47,7 @@ export function ProductImage({ url, defaultImage, name, className = "", sizes = 
   );
 }
 
-export function ProductCard({ p, extras, currency, orderable }: { p: CatalogProduct; extras: CatalogExtra[]; currency: Currency | null; orderable: boolean }) {
+function PizzaCard({ p, extras, currency, orderable }: { p: CatalogProduct; extras: CatalogExtra[]; currency: Currency | null; orderable: boolean }) {
   const { add } = useCart();
   const [size, setSize] = useState<Size>(p.sizes[0].size);
   const [qty, setQty] = useState(1);
@@ -70,6 +71,8 @@ export function ProductCard({ p, extras, currency, orderable }: { p: CatalogProd
         <div>
           <h3 className="text-xl font-extrabold">{p.name}</h3>
           {p.description && <p className="mt-1 text-sm text-ink-soft">{p.description}</p>}
+          {p.ingredients && <p className="mt-1 text-sm text-ink-soft"><strong>Ingrédients : </strong>{p.ingredients}</p>}
+          {p.state === "unavailable" && <span className="badge mt-2 bg-stone-200 text-stone-800">Indisponible</span>}
         </div>
 
         <fieldset>
@@ -118,12 +121,103 @@ export function ProductCard({ p, extras, currency, orderable }: { p: CatalogProd
             <span className="w-8 text-center text-lg font-bold" aria-live="polite">{qty}</span>
             <button type="button" className="stepper-btn" onClick={() => setQty((q) => Math.min(MAX_LINE_QUANTITY, q + 1))} aria-label="Ajouter une pizza"><Plus size={18} aria-hidden="true" /></button>
           </div>
-          <button type="button" onClick={onAdd} disabled={!orderable} className={`btn min-w-0 flex-1 ${added ? "btn-basil" : "btn-primary"}`}>
-            {added ? <><Check size={18} aria-hidden="true" />Ajouté</> : <>Ajouter au panier · {formatMoney(unit * qty, currency)}</>}
+          <button type="button" onClick={onAdd} disabled={!orderable || p.state !== "orderable"} className={`btn min-w-0 flex-1 ${added ? "btn-basil" : "btn-primary"}`}>
+            {added ? <><Check size={18} aria-hidden="true" />Ajouté</> : p.state === "unavailable" ? "Indisponible" : <>Ajouter au panier · {formatMoney(unit * qty, currency)}</>}
           </button>
         </div>
         <p className="sr-only" role="status">{added ? `${p.name} ajouté au panier` : ""}</p>
       </div>
     </article>
   );
+}
+
+const cap = (t: string | null) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
+
+/** Produit non configuré (prix ou unité de vente manquants) ou pizza sans taille tarifée : « Bientôt disponible », ajout au panier impossible. */
+function SoonCard({ p }: { p: CatalogProduct }) {
+  return (
+    <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <h3 className="text-xl font-extrabold">{p.name}</h3>
+          {p.description && <p className="mt-1 text-sm text-ink-soft">{p.description}</p>}
+          {p.ingredients && <p className="mt-1 text-sm text-ink-soft"><strong>Ingrédients : </strong>{p.ingredients}</p>}
+        </div>
+        <p className="text-sm font-bold text-ink-soft">Prix et conditions de vente à venir.</p>
+        <button type="button" disabled className="btn btn-primary mt-auto w-full" aria-disabled="true">Bientôt disponible</button>
+      </div>
+    </article>
+  );
+}
+
+/** Produit hors pizza : à l'unité ou par portion, variantes facultatives. Aucune taille S–XXL. */
+function OtherCard({ p, currency, orderable }: { p: CatalogProduct; currency: Currency | null; orderable: boolean }) {
+  const { add } = useCart();
+  const [variantId, setVariantId] = useState("");
+  const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+  const unit = unitLabel(p.sale_unit, p.pieces_per_portion);
+  const variant = p.variants.find((v) => v.id === variantId);
+  const required = variantRequired(p); // sans prix de base : choix de portion obligatoire, aucune sélection par défaut
+  const price = variant ? variant.price_minor : p.base_price_minor ?? 0;
+  const choiceMissing = required && !variant;
+  const canOrder = orderable && p.state === "orderable" && !choiceMissing;
+  const shownUnit = variant ? variantOptionLabel(p.sale_unit, p.pieces_per_portion, variant) : unit;
+
+  function onAdd() {
+    add({ productId: p.id, variantId: variantId || undefined, quantity: qty, extraIds: [] });
+    setAdded(true); setQty(1); setTimeout(() => setAdded(false), 1800);
+  }
+
+  return (
+    <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        <div>
+          <h3 className="text-xl font-extrabold">{p.name}</h3>
+          {p.description && <p className="mt-1 text-sm text-ink-soft">{p.description}</p>}
+          {p.ingredients && <p className="mt-1 text-sm text-ink-soft"><strong>Ingrédients : </strong>{p.ingredients}</p>}
+          {p.state === "unavailable" && <span className="badge mt-2 bg-stone-200 text-stone-800">Indisponible</span>}
+        </div>
+        <p>
+          {choiceMissing
+            ? <span className="text-2xl font-extrabold text-tomato">À partir de {formatMoney(minPriceMinor(p) ?? 0, currency)}</span>
+            : <span className="text-2xl font-extrabold text-tomato">{formatMoney(price, currency)}</span>}
+          {!choiceMissing && <span className="text-sm text-ink-soft"> · {cap(shownUnit)}</span>}
+        </p>
+        {p.variants.length > 0 && (
+          <fieldset>
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">{required ? "Choisissez votre portion" : "Variante"}</legend>
+            <div className="flex flex-wrap gap-2">
+              {[...(required ? [] : [{ id: "", label: "Standard", price_minor: p.base_price_minor ?? 0 }]), ...p.variants].map((v) => (
+                <label key={v.id || "std"} className={`min-w-[5rem] cursor-pointer rounded-xl border px-3 py-2 text-center transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-basil ${variantId === v.id ? "border-tomato bg-tomato text-white" : "border-[#cfc8bd] bg-white hover:border-ink"}`}>
+                  <input type="radio" name={`variant-${p.id}`} className="sr-only" checked={variantId === v.id} onChange={() => setVariantId(v.id)} />
+                  <span className="block text-sm font-bold">{v.label}</span>
+                  <span className="block text-xs font-semibold">{formatMoney(v.price_minor, currency)}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
+        <div className="mt-auto flex flex-wrap items-center gap-3 pt-1">
+          <div className="flex items-center gap-1" role="group" aria-label={`Quantité de ${p.name}`}>
+            <button type="button" className="stepper-btn" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label={`Retirer un ${p.name}`}><Minus size={18} aria-hidden="true" /></button>
+            <span className="w-8 text-center text-lg font-bold" aria-live="polite">{qty}</span>
+            <button type="button" className="stepper-btn" onClick={() => setQty((q) => Math.min(MAX_LINE_QUANTITY, q + 1))} aria-label={`Ajouter un ${p.name}`}><Plus size={18} aria-hidden="true" /></button>
+          </div>
+          <button type="button" onClick={onAdd} disabled={!canOrder} className={`btn min-w-0 flex-1 ${added ? "btn-basil" : "btn-primary"}`}>
+            {added ? <><Check size={18} aria-hidden="true" />Ajouté</> : p.state === "unavailable" ? "Indisponible" : choiceMissing ? "Choisissez une portion" : <>Ajouter au panier · {formatMoney(price * qty, currency)}</>}
+          </button>
+        </div>
+        <p className="sr-only" role="status">{added ? `${p.name} ajouté au panier` : ""}</p>
+      </div>
+    </article>
+  );
+}
+
+export function ProductCard(props: { p: CatalogProduct; extras: CatalogExtra[]; currency: Currency | null; orderable: boolean }) {
+  const { p } = props;
+  if (p.state === "soon") return <SoonCard p={p} />;
+  return p.product_type === "other" ? <OtherCard p={p} currency={props.currency} orderable={props.orderable} /> : <PizzaCard {...props} />;
 }

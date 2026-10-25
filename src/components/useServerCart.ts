@@ -10,7 +10,9 @@ export type ServerLine = {
   productName: string;
   imageUrl: string | null;
   defaultImage: string | null;
-  size: Size;
+  size: Size | null;
+  variantId: string | null;
+  optionLabel: string | null;
   quantity: number;
   unitPriceMinor: number;
   extras: { id: string; name: string; price_minor: number }[];
@@ -21,7 +23,7 @@ export type ServerLine = {
 export type ServerCart = {
   lines: ServerLine[];
   subtotalMinor: number;
-  problems: { key: string; productId: string; size: Size; productName: string; reason: string }[];
+  problems: { key: string; productId: string; size: Size | null; productName: string; reason: string }[];
 };
 
 /** Prix vérifiés par le serveur pour le contenu du panier (aucun prix ne vient du navigateur). */
