@@ -8,6 +8,7 @@ import { useCart } from "./CartProvider";
 import { useServerCart } from "./useServerCart";
 import { checkoutSchema, fieldErrors } from "@/lib/validation";
 import { formatMoney } from "@/lib/money";
+import { lineOption } from "@/lib/productSale";
 import type { Currency } from "@/lib/constants";
 
 type Zone = { id: string; name: string; commune: string | null; fee_minor: number; is_demo: boolean };
@@ -223,7 +224,7 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
         <h2 className="text-xl font-extrabold">Récapitulatif</h2>
         <ul className="space-y-1 text-sm">
           {data?.lines.map((l) => (
-            <li key={l.key} className="flex justify-between gap-2"><span>{l.quantity} × {l.productName} ({l.size})</span><span className="font-semibold">{formatMoney(l.lineTotalMinor, currency)}</span></li>
+            <li key={l.key} className="flex justify-between gap-2"><span>{l.quantity} × {l.productName} ({lineOption({ size: l.size, option_label: l.optionLabel })})</span><span className="font-semibold">{formatMoney(l.lineTotalMinor, currency)}</span></li>
           ))}
         </ul>
         <div className="space-y-1 border-t border-line pt-3">

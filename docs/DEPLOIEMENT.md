@@ -11,7 +11,7 @@ Aucune étape ne doit exposer de secret : les clés se saisissent dans les varia
 3. Authentication → Sign In / Providers : désactiver « Allow new users to sign up ».
 
 ### Projet déjà installé : appliquer seulement les nouvelles migrations
-`setup.sql` ne sert qu'à une base vide. Sur une base déjà installée, exécutez uniquement la ou les migrations ajoutées depuis (fichiers de `supabase/migrations`, dans l'ordre). Elles sont idempotentes. Dernière en date : `20260105000000_payment_methods_details.sql` (active MonCash et ajoute les champs instructions / compte destinataire / bénéficiaire). Le site continue de fonctionner avant son application, mais MonCash n'apparaît qu'après.
+`setup.sql` ne sert qu'à une base vide. Sur une base déjà installée, exécutez uniquement la ou les migrations ajoutées depuis (fichiers de `supabase/migrations`, dans l'ordre). Elles sont idempotentes. Dernière en date : `20260106000000_non_pizza_products.sql` (produits Burger et Wings, variantes, unité de vente). **À appliquer AVANT de déployer cette version** : le catalogue public lit les nouvelles colonnes et le menu affichera une erreur tant que la migration n'est pas passée. Elle ne crée ni prix, ni portion, ni ingrédient : Burger et Wings restent « Bientôt disponible » jusqu'à ce que l'administrateur renseigne le prix et l'unité de vente (Admin → Menu → fiche du produit). La précédente, `20260105000000_payment_methods_details.sql`, active MonCash et ajoute les champs instructions / compte / bénéficiaire.
 
 ## 2. Variables d'environnement (Vercel → Settings → Environment Variables)
 | Variable | Valeur |

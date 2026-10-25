@@ -62,7 +62,7 @@ export default async function Home() {
           <Link href="/menu" className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-tomato">Voir tout le menu<ArrowRight size={16} aria-hidden="true" /></Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
-          {products.map((p) => (
+          {products.filter((p) => p.product_type === "pizza" && p.sizes.length > 0).map((p) => (
             <Link key={p.id} href={`/menu#p-${p.id}`} className="card group flex flex-col overflow-hidden transition-shadow hover:shadow-md" aria-label={`Choisir ${p.name}`}>
               <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, 380px" />
               <div className="flex items-end justify-between gap-3 p-4">

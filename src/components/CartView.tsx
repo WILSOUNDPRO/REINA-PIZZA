@@ -7,6 +7,7 @@ import { useServerCart } from "./useServerCart";
 import { ProductImage } from "./ProductCard";
 import { formatMoney } from "@/lib/money";
 import { lineKey } from "@/lib/cart";
+import { lineOption } from "@/lib/productSale";
 import type { Currency, Size } from "@/lib/constants";
 
 export function CartView({ currency, canOrder, blockedReason }: { currency: Currency | null; canOrder: boolean; blockedReason?: string }) {
@@ -35,7 +36,7 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
       <div className="space-y-3">
         {problems.map((p) => (
           <div key={p.key} role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-tomato bg-white p-4">
-            <p className="text-sm"><strong>{p.productName}</strong> n'est plus disponible à la commande.</p>
+            <p className="text-sm"><strong>{p.productName}</strong> {p.reason === "not_configured" ? "n'est pas encore disponible à la commande." : "n'est plus disponible à la commande."}</p>
             <button className="btn btn-ghost !min-h-11 text-sm" onClick={() => remove(p.key)}>Retirer</button>
           </div>
         ))}
@@ -50,12 +51,12 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
               {l.extras.length > 0 && <p className="text-xs text-ink-soft">+ {l.extras.map((e) => e.name).join(", ")}</p>}
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <label className="flex items-center gap-2 text-sm">
-                  <span className="text-ink-soft">Taille</span>
-                  {l.availableSizes.length > 1 ? (
-                    <select className="field !min-h-11 !w-auto !py-1" value={l.size} onChange={(e) => setSize(lineKey({ productId: l.productId, size: l.size, extraIds: l.extras.map((x) => x.id) }), e.target.value as Size)}>
+                  {l.size && <span className="text-ink-soft">Taille</span>}
+                  {l.size && l.availableSizes.length > 1 ? (
+                    <select className="field !min-h-11 !w-auto !py-1" value={l.size} onChange={(e) => setSize(lineKey({ productId: l.productId, size: l.size ?? undefined, variantId: l.variantId ?? undefined, extraIds: l.extras.map((x) => x.id) }), e.target.value as Size)}>
                       {l.availableSizes.map((s) => <option key={s.size} value={s.size}>{s.size} · {formatMoney(s.priceMinor, currency)}</option>)}
                     </select>
-                  ) : <strong>{l.size}</strong>}
+                  ) : <strong>{lineOption({ size: l.size, option_label: l.optionLabel })}</strong>}
                 </label>
                 <div className="flex items-center gap-1" role="group" aria-label={`Quantité de ${l.productName}`}>
                   <button className="stepper-btn" onClick={() => setQuantity(l.key, l.quantity - 1)} aria-label="Retirer une pizza"><Minus size={16} aria-hidden="true" /></button>

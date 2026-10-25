@@ -11,6 +11,7 @@ import { formatPhoneDisplay, normalizePhone } from "@/lib/phone";
 import { locationHref } from "@/lib/location";
 import { buildOrderMessage, waLink } from "@/lib/whatsapp";
 import { PAYMENT_STATUS_LABELS, ORDER_STATUS_LABELS } from "@/lib/labels";
+import { lineOption } from "@/lib/productSale";
 import { Logo } from "@/components/Logo";
 import { ProductImage } from "@/components/ProductCard";
 import { OrderMessageActions } from "@/components/OrderMessageActions";
@@ -81,7 +82,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
             <li key={i.id} className="flex items-center gap-3 py-3 first:pt-0">
               <ProductImage url={i.image_url ?? null} defaultImage={i.default_image} name={i.product_name} className="h-[48px] w-16 shrink-0 rounded-lg" sizes="64px" showBadge={false} />
               <span className="min-w-0 flex-1">
-                <strong className="block">{i.product_name} · {i.size}</strong>
+                <strong className="block">{i.product_name}{lineOption(i) ? ` · ${lineOption(i)}` : ""}</strong>
                 <span className="block text-sm text-ink-soft">{i.quantity} × {money(i.unit_price_minor)}</span>
                 {i.extras.length > 0 && <span className="block text-xs text-ink-soft">+ {i.extras.map((e) => e.name).join(", ")}</span>}
               </span>

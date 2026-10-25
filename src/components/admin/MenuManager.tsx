@@ -9,7 +9,8 @@ import { RowMenu } from "./RowMenu";
 import { SizesPanel } from "./SizesPanel";
 import { formatMoney } from "@/lib/money";
 import { SIZES, type Currency } from "@/lib/constants";
-import { isPriced, type AdminProduct, type AdminSize } from "@/server/menu";
+import { isPriced, isProductConfigured, type AdminProduct, type AdminSize } from "@/server/menu";
+import { unitLabel } from "@/lib/productSale";
 
 type Notice = { kind: "ok" | "error"; text: string } | null;
 
@@ -36,6 +37,16 @@ function Switch({ checked, busy, label, onChange }: { checked: boolean; busy: bo
 }
 
 function Sizes({ p, currency }: { p: AdminProduct; currency: Currency | null }) {
+  if (p.product_type === "other") {
+    const unit = unitLabel(p.sale_unit, p.pieces_per_portion);
+    if (!isProductConfigured(p)) return <span className="rounded-lg bg-amber-100 px-2 py-1 text-sm font-semibold text-amber-950">Non configuré : prix et unité à renseigner</span>;
+    return (
+      <div className="space-y-1">
+        <span className="rounded-lg bg-cream-2 px-2 py-1 text-sm font-semibold">{formatMoney(p.base_price_minor!, currency)} · {unit}</span>
+        {p.variants.filter((v) => v.available).length > 0 && <p className="text-xs text-ink-soft">{p.variants.filter((v) => v.available).map((v) => `${v.label} ${formatMoney(v.price_minor, currency)}`).join(" · ")}</p>}
+      </div>
+    );
+  }
   const priced = p.sizes.filter(isPriced);
   const missing = SIZES.filter((s) => !priced.some((x) => x.size === s));
   return (
@@ -55,7 +66,7 @@ function Name({ p }: { p: AdminProduct }) {
       <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="h-[42px] w-14 shrink-0 rounded-lg" sizes="56px" showBadge={false} />
       <div className="min-w-0">
         <p className="font-extrabold leading-tight">{p.name}</p>
-        <p className="text-xs text-ink-soft">{p.category_name ?? "Sans catégorie"}{!p.image_url && p.default_image ? " · illustration par défaut" : ""}{p.is_demo ? " · démo" : ""}{p.archived ? " · archivé" : ""}</p>
+        <p className="text-xs text-ink-soft">{p.category_name ?? "Sans catégorie"}{!p.visible ? " · masqué" : ""}{!p.image_url && p.default_image ? " · illustration par défaut" : ""}{p.is_demo ? " · démo" : ""}{p.archived ? " · archivé" : ""}</p>
       </div>
     </div>
   );
@@ -65,7 +76,7 @@ function Actions({ p, disabled, onSizes, onArchive, onRemove }: { p: AdminProduc
   return (
     <div className="flex items-center gap-2">
       <Link href={`/admin/menu/${p.id}`} className="stepper-btn" aria-label={`Modifier ${p.name}`} title="Modifier le produit"><Pencil size={17} aria-hidden="true" /></Link>
-      <button type="button" className="stepper-btn" aria-label={`Modifier les tailles et prix de ${p.name}`} title="Tailles et prix" onClick={onSizes}><Tag size={17} aria-hidden="true" /></button>
+      {p.product_type === "pizza" && <button type="button" className="stepper-btn" aria-label={`Modifier les tailles et prix de ${p.name}`} title="Tailles et prix" onClick={onSizes}><Tag size={17} aria-hidden="true" /></button>}
       <RowMenu label={`Plus d'actions pour ${p.name}`} items={[
         p.archived ? { label: "Restaurer le produit", onSelect: () => onArchive(false), disabled } : { label: "Archiver le produit", onSelect: () => onArchive(true), disabled, hint: "Masqué du site, conservé dans les commandes" },
         { label: "Supprimer définitivement", onSelect: onRemove, danger: true, disabled: disabled || p.orders_count > 0, hint: p.orders_count > 0 ? "Lié à des commandes : archivage uniquement" : undefined },
@@ -169,7 +180,7 @@ export function MenuManager({ products, currency, archivedView, filtered }: { pr
           </li>
         ))}
       </ul>
-      {items.some((p) => p.sizes.filter(isPriced).length < SIZES.length) && <p className="flex items-start gap-2 text-sm text-ink-soft"><span aria-hidden="true">ⓘ</span>Les tailles sans tarif ne sont pas proposées à la commande tant que leur prix n'est pas renseigné.</p>}
+      {items.some((p) => p.product_type === "pizza" && p.sizes.filter(isPriced).length < SIZES.length) && <p className="flex items-start gap-2 text-sm text-ink-soft"><span aria-hidden="true">ⓘ</span>Les tailles sans tarif ne sont pas proposées à la commande tant que leur prix n'est pas renseigné.</p>}
 
       {editingProduct && <SizesPanel key={editingProduct.id} product={editingProduct} currency={currency} onClose={closeEditor}
         onSaved={(sizes: AdminSize[]) => { setItems((l) => l.map((x) => (x.id === editingProduct.id ? { ...x, sizes } : x))); router.refresh(); }} />}

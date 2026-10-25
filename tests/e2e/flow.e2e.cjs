@@ -17,11 +17,14 @@ async function fillCustomer(page, over = {}) {
   for (const [k, val] of Object.entries(v)) await page.fill(`#f-${k}`, val);
 }
 async function addPizza(page, name = "Pizza pepperoni", qty = 1) {
-  await page.goto(BASE + "/menu");
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  const qtyIn = () => page.evaluate(() => JSON.parse(localStorage.getItem("reina-cart-v1") ?? "[]").reduce((t, i) => t + i.quantity, 0));
+  const before = await qtyIn();
   const card = page.locator("article", { hasText: name });
   for (let i = 1; i < qty; i++) await card.getByRole("button", { name: "Ajouter une pizza" }).click();
   await card.getByRole("button", { name: /Ajouter au panier/ }).click();
   await page.getByText("Ajouté", { exact: true }).first().waitFor();
+  await page.waitForFunction((n) => JSON.parse(localStorage.getItem("reina-cart-v1") ?? "[]").reduce((t, i) => t + i.quantity, 0) >= n, before + qty, { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(150);
 }
 async function submitOrder(page) {
@@ -43,6 +46,8 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   psql("update products set available = true, archived_at = null, image_url = null where name like 'Pizza %'");
   psql("update payment_methods set enabled = true, instructions = null, recipient_account = null, recipient_name = null, label = 'MonCash' where label like 'MonCash%'");
   psql("delete from payment_methods where label = 'Test e2e'");
+  const resetOther = () => { psql("update products set base_price_minor = null, sale_unit = null, pieces_per_portion = null, available = false, visible = true, image_url = null where product_type = 'other'"); psql("delete from product_variants"); };
+  resetOther();
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const page = await ctx.newPage();
@@ -234,7 +239,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.screenshot({ path: `${SHOTS}/11-checkout-zone.png`, fullPage: true, caret: "initial" });
   await submitOrder(page);
   const zr = norm(await page.locator("main").innerText());
-  check("confirmation à plusieurs articles : 3 lignes, sous-total, livraison, total", (await page.locator("section[aria-labelledby=detail] li").count()) === 3 && zr.includes("Pizza pepperoni · S") && zr.includes("Pizza jambon · S") && zr.includes("Pizza hareng saur · S") && zr.includes("1 x 1 500 HTG".replace(" x ", " × ")) && zr.includes("4 550 HTG") && zr.includes("250 HTG") && zr.includes("4 800 HTG"));
+  check("confirmation à plusieurs articles : 3 lignes, sous-total, livraison, total", (await page.locator("section[aria-labelledby=detail] li").count()) === 3 && zr.includes("Pizza pepperoni · Taille S") && zr.includes("Pizza jambon · Taille S") && zr.includes("Pizza hareng saur · Taille S") && zr.includes("1 x 1 500 HTG".replace(" x ", " × ")) && zr.includes("4 550 HTG") && zr.includes("250 HTG") && zr.includes("4 800 HTG"));
   check("confirmation : miniatures des articles", (await page.locator("section[aria-labelledby=detail] img").count()) >= 1);
   const wz = decodeURIComponent((await page.getByRole("link", { name: "Confirmer sur WhatsApp" }).getAttribute("href")).split("?text=")[1]);
   check("zone tarifée : message à 3 lignes avec Total", norm(wz).includes("• 1 × Pizza jambon — taille S — 1 250 HTG") && norm(wz).includes("Livraison : 250 HTG\nTotal : 4 800 HTG"));
@@ -323,11 +328,11 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const mm = norm(await ap.locator("main").innerText());
   check("menu admin : titre, sous-titre, bouton « Nouveau produit »", mm.includes("Gestion du menu") && mm.includes("Produits, tailles et disponibilités") && (await ap.getByRole("link", { name: "Nouveau produit" }).isVisible()));
   const sumText = norm(await ap.locator("[aria-label='Synthèse du menu']").innerText());
-  check("menu admin : synthèse réelle 3 produits · 3 disponibles · 3 tailles tarifées", /3\s+produits/.test(sumText) && /3\s+disponibles/.test(sumText) && /3\s+tailles tarifées/.test(sumText), sumText);
+  check("menu admin : synthèse réelle 5 produits · 3 disponibles · 3 tailles tarifées", /5\s+produits/.test(sumText) && /3\s+disponibles/.test(sumText) && /3\s+tailles tarifées/.test(sumText), sumText);
   check("menu admin : onglets Produits et Catégories réels, pas d'onglet fictif", (await ap.locator("nav[aria-label='Sections du catalogue'] a").allInnerTexts()).join("|") === "Produits|Catégories|Suppléments");
   check("menu admin : sidebar (Vue d'ensemble, Commandes, Menu, Livraison, Réglages), Menu actif, fil d'Ariane, compte réel", (await ap.locator("aside nav a").allInnerTexts()).map((t) => t.replace(/\d+$/, "").trim()).join("|") === "Vue d'ensemble|Commandes|Menu|Livraison|Moyens de paiement|Réglages" && (await ap.locator("aside a[aria-current=page]").innerText()).includes("Menu") && (await ap.getByLabel("Fil d'Ariane").innerText()).includes("Catalogue") && (await ap.locator("header").innerText()).includes("admin@reina.test"));
   const rows = ap.locator("tbody tr");
-  check("menu admin : 3 lignes, tailles et prix affichés, tarifs à renseigner signalés", (await rows.count()) === 3 && norm(await rows.first().innerText()).includes("S · 1 500 HTG") && norm(await rows.first().innerText()).includes("M, L, XL, XXL : tarifs à renseigner"));
+  check("menu admin : 5 lignes, tailles et prix affichés, tarifs à renseigner signalés", (await rows.count()) === 5 && norm(await rows.first().innerText()).includes("S · 1 500 HTG") && norm(await rows.first().innerText()).includes("M, L, XL, XXL : tarifs à renseigner"));
   // recherche + filtre
   await ap.fill("#q", "jambon"); await Promise.all([ap.waitForURL(/q=jambon/), ap.getByRole("button", { name: "Filtrer" }).click()]); await ap.waitForLoadState("networkidle");
   check("recherche « jambon » : une seule ligne", (await ap.locator("tbody tr").count()) === 1 && (await ap.locator("tbody tr").innerText()).includes("Pizza jambon"));
@@ -341,7 +346,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await ap.getByText("Pizza hareng saur est maintenant indisponible.").waitFor();
   check("disponibilité : interrupteur → sauvegarde serveur (base) et synthèse mise à jour", (await sw.getAttribute("aria-checked")) === "false" && psql("select available from products where name = 'Pizza hareng saur'") === "f" && await ap.waitForFunction(() => /2\s+disponibles/.test(document.querySelector("[aria-label='Synthèse du menu']").innerText), null, { timeout: 6000 }).then(() => true, () => false));
   await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
-  check("produit indisponible retiré du menu client", (await page.locator("article", { hasText: "Pizza hareng saur" }).count()) === 0);
+  { const hc = page.locator("article", { hasText: "Pizza hareng saur" }); check("produit indisponible : visible « Indisponible », non commandable", (await hc.count()) === 1 && (await hc.innerText()).includes("Indisponible") && (await hc.getByRole("button", { name: "Indisponible" }).isDisabled())); }
   await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
   await ap.locator("tbody tr", { hasText: "Pizza hareng saur" }).getByRole("switch").click();
   await ap.getByText("Pizza hareng saur est maintenant disponible.").waitFor();
@@ -406,7 +411,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await ap.check("input[name=size_S_on]"); await ap.fill("input[name=size_S_price]", "100");
   await ap.setInputFiles("input[name=image]", { name: "photo.jpg", mimeType: "image/jpeg", buffer: big });
   await adminAction(ap, "Enregistrer", "/admin/menu", true);
-  check("admin : produit avec photo enregistré", /\/admin\/menu\/[0-9a-f-]{36}/.test(ap.url()));
+  check("admin : produit avec photo enregistré", /\/admin\/menu\/[0-9a-f-]{36}/.test(ap.url()), ap.url() + " " + norm(await ap.locator("main").innerText()).slice(0, 300));
   await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
   const dims = await page.locator("article", { hasText: "Test photo e2e" }).locator("img").first().evaluate((i) => ({ w: i.naturalWidth, h: i.naturalHeight, box: i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height }));
   check("photo : recadrée 1200×900 (4:3), conteneur 4:3, sans déformation", dims.w === 1200 && dims.h === 900 && Math.abs(dims.box - 4 / 3) < 0.02, JSON.stringify(dims));
@@ -463,7 +468,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   for (const w of [360, 390]) {
     await ap.setViewportSize({ width: w, height: 800 });
     await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
-    check(`menu admin ${w} px : cartes produit (tableau masqué), pas de défilement horizontal`, (await ap.locator("ul.md\\:hidden > li").count()) === 3 && !(await ap.locator("tbody").isVisible()) && await noScroll(ap));
+    check(`menu admin ${w} px : cartes produit (tableau masqué), pas de défilement horizontal`, (await ap.locator("ul.md\\:hidden > li").count()) === 5 && !(await ap.locator("tbody").isVisible()) && await noScroll(ap));
     await ap.locator("ul.md\\:hidden > li", { hasText: "Pizza pepperoni" }).getByRole("button", { name: /Modifier les tailles et prix/ }).click();
     const md = ap.getByRole("dialog");
     await md.waitFor(); await ap.waitForTimeout(350); // fin de l'animation d'ouverture
@@ -481,6 +486,111 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
       await ap.screenshot({ path: `${SHOTS}/${name}-${label}.png`, fullPage: true, caret: "initial" });
     }
   }
+
+  // 15. Burger et Wings : catalogue « Bientôt disponible », contrôle serveur, configuration admin, commande mixte
+  const burgerId = psql("select id from products where name = 'Burger'"), wingsId = psql("select id from products where name = 'Wings'");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  check("catalogue : navigation compacte « Tout · Pizzas · Burgers · Wings »", (await page.locator("nav[aria-label='Catégories'] a").allInnerTexts()).join("|") === "Tout|Pizzas|Burgers|Wings" && await noScroll(page));
+  for (const [name, slug] of [["Burger", "burger"], ["Wings", "wings"]]) {
+    const card = page.locator("article").filter({ has: page.getByRole("heading", { name, exact: true }) }).first();
+    await card.scrollIntoViewIfNeeded();
+    await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
+    const info = await card.locator("img").first().evaluate((i) => ({ src: i.currentSrc, set: i.srcset, w: i.getAttribute("width"), h: i.getAttribute("height"), nat: i.naturalWidth, box: i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height, fit: getComputedStyle(i).objectFit }));
+    check(`catalogue : ${name} → /images/products/${slug}*.webp, srcset 480/800/1200, 4:3, dimensions réservées`, info.src.includes(`/images/products/${slug}`) && info.src.endsWith(".webp") && /480w.*800w.*1200w/.test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === "1200" && info.h === "900" && info.nat > 0, JSON.stringify(info));
+    const txt = norm(await card.innerText());
+    check(`catalogue : ${name} « Bientôt disponible », bouton désactivé, aucun prix ni portion inventé, « Photo d'illustration »`, txt.includes("Bientôt disponible") && (await card.getByRole("button", { name: "Bientôt disponible" }).isDisabled()) && !/\d\s?HTG|\d+ pièces|portion|taille/i.test(txt.replace("Photo d'illustration", "")) && txt.includes("Photo d'illustration"), txt);
+  }
+  await page.screenshot({ path: `${SHOTS}/catalogue-mobile-bientot.png`, fullPage: true, caret: "initial" });
+  await page.goto(BASE + "/menu?categorie=burgers"); await page.waitForLoadState("networkidle");
+  check("catalogue : filtre « Burgers » (une seule catégorie affichée)", (await page.locator("article").count()) === 1 && (await page.locator("article").innerText()).includes("Burger") && (await page.locator("nav[aria-label='Catégories'] a[aria-current=page]").innerText()) === "Burgers");
+  // contrôle serveur : commande forcée d'un produit non configuré
+  const pmId = psql("select id from payment_methods where enabled order by position limit 1");
+  const payload = (items) => JSON.stringify({ items, deliveryMode: "quote", idempotencyKey: "e2e" + Math.random().toString(36).slice(2, 12) + "abcdef", paymentMethodId: pmId, customer: { fullName: "Test Serveur", phone: "34123456", commune: "Delmas", quarter: "Delmas 33", address: "Rue test 1", landmark: "Près de l'école" } });
+  let fr = await fetch(`${BASE}/api/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload([{ productId: burgerId, quantity: 1, extraIds: [] }]) });
+  let fj = await fr.json();
+  check("serveur : commande d'un burger non configuré refusée (409 cart_problems), aucune commande créée", fr.status === 409 && fj.code === "cart_problems" && fj.problems[0].reason === "not_configured");
+  fr = await fetch(`${BASE}/api/cart/price`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items: [{ productId: wingsId, quantity: 1, extraIds: [] }] }) });
+  fj = await fr.json();
+  check("serveur : le prix du panier signale « non configuré » et ne chiffre rien", fj.lines.length === 0 && fj.subtotalMinor === 0 && fj.problems[0].reason === "not_configured");
+  check("panier : un burger forcé dans le stockage n'est jamais commandable", await (async () => { const c2 = await browser.newContext({ viewport: { width: 390, height: 844 } }); await c2.addInitScript((id) => localStorage.setItem("reina-cart-v1", JSON.stringify([{ productId: id, quantity: 1, extraIds: [] }])), burgerId); const p2 = await c2.newPage(); await p2.goto(BASE + "/panier"); await p2.getByText("n'est pas encore disponible à la commande").waitFor({ timeout: 8000 }).catch(() => {}); const ok = (await p2.getByText("n'est pas encore disponible à la commande").count()) > 0 && (await p2.getByRole("link", { name: "Renseigner ma livraison" }).getAttribute("aria-disabled")) === "true"; await c2.close(); return ok; })());
+
+  // Administration : produit non configuré, activation refusée, configuration, activation
+  await ap.setViewportSize({ width: 1280, height: 900 });
+  await ap.goto(`${BASE}/admin/menu`); await ap.waitForLoadState("networkidle");
+  const rowB = ap.locator("tbody tr", { hasText: "Burger" });
+  check("admin : Burger/Wings listés « Non configuré », sans éditeur de tailles de pizza", (await ap.locator("tbody").getByText("Non configuré : prix et unité à renseigner").count()) === 2 && (await rowB.getByRole("button", { name: /tailles et prix/ }).count()) === 0);
+  await ap.screenshot({ path: `${SHOTS}/admin-menu-burger-wings.png`, fullPage: true, caret: "initial" });
+  await rowB.getByRole("switch").click();
+  check("admin : activation refusée tant que prix et unité manquent", await ap.getByText("Renseignez le prix et l'unité de vente avant d'activer ce produit.").waitFor({ timeout: 6000 }).then(() => true, () => false) && psql("select available from products where name = 'Burger'") === "f");
+  await ap.goto(`${BASE}/admin/menu/${burgerId}`); await ap.waitForLoadState("networkidle");
+  check("admin : fiche Burger — pas de tailles S–XXL, champs prix / unité / variantes / ingrédients / visibilité", (await ap.locator("input[name=size_S_on]").count()) === 0 && (await ap.locator("input[name=basePrice]").count()) === 1 && (await ap.locator("select[name=saleUnit]").count()) === 1 && (await ap.locator("input[name=variant_0_label]").count()) === 1 && (await ap.locator("textarea[name=ingredients]").count()) === 1 && (await ap.locator("input[name=visible]").count()) === 1 && (await ap.getByText("Non configuré : tant que le prix").isVisible()));
+  await ap.screenshot({ path: `${SHOTS}/admin-fiche-burger.png`, fullPage: true, caret: "initial" });
+  await ap.fill("input[name=basePrice]", "1 500"); await ap.selectOption("select[name=saleUnit]", "unit");
+  await ap.fill("input[name=variant_0_label]", "Double"); await ap.fill("input[name=variant_0_price]", "2200");
+  await ap.check("input[name=available]");
+  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/admin/menu/")), ap.getByRole("button", { name: "Enregistrer" }).click()]);
+  await ap.getByText("Produit enregistré.").waitFor();
+  check("admin : Burger configuré (1 500 HTG, à l'unité, variante Double 2 200 HTG) et activé", psql("select base_price_minor || '|' || sale_unit || '|' || available from products where name = 'Burger'") === "150000|unit|true" && psql("select label || '|' || price_minor from product_variants where product_id = '" + burgerId + "'") === "Double|220000");
+  await ap.goto(`${BASE}/admin/menu/${wingsId}`); await ap.waitForLoadState("networkidle");
+  await ap.fill("input[name=basePrice]", "1800"); await ap.selectOption("select[name=saleUnit]", "portion"); await ap.fill("input[name=pieces]", "6"); await ap.check("input[name=available]");
+  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/admin/menu/")), ap.getByRole("button", { name: "Enregistrer" }).click()]);
+  await ap.getByText("Produit enregistré.").waitFor();
+  check("admin : Wings configuré (1 800 HTG, par portion de 6 pièces) et activé", psql("select base_price_minor || '|' || sale_unit || '|' || pieces_per_portion || '|' || available from products where name = 'Wings'") === "180000|portion|6|true");
+  // pièces sans portion : refusé
+  await ap.goto(`${BASE}/admin/menu/${burgerId}`); await ap.fill("input[name=pieces]", "6");
+  await Promise.all([ap.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/admin/menu/")), ap.getByRole("button", { name: "Enregistrer" }).click()]);
+  check("admin : nombre de pièces refusé pour une vente à l'unité", await ap.getByText("ne s'applique qu'à une vente par portion").waitFor({ timeout: 6000 }).then(() => true, () => false));
+
+  // Client : produits configurés, commande mixte
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  const bc = page.locator("article").filter({ has: page.getByRole("heading", { name: "Burger", exact: true }) }).first(), wc = page.locator("article").filter({ has: page.getByRole("heading", { name: "Wings", exact: true }) }).first();
+  const bt = norm(await bc.innerText()), wt = norm(await wc.innerText());
+  check("catalogue : Burger 1 500 HTG · À l'unité, variantes Standard / Double ; aucune taille S–XXL", bt.includes("1 500 HTG") && bt.includes("À l'unité") && bt.includes("Double") && bt.includes("2 200 HTG") && !/\bXXL\b|Taille/.test(bt) && (await bc.getByRole("button", { name: /Ajouter au panier/ }).isEnabled()));
+  check("catalogue : Wings 1 800 HTG · Portion de 6 pièces, sans variante ni accompagnement annoncé", wt.includes("1 800 HTG") && wt.includes("Portion de 6 pièces") && !/frites|boisson|sauce/i.test(wt) && !/Variante/.test(wt) && (await wc.getByRole("button", { name: /Ajouter au panier/ }).isEnabled()));
+  await page.screenshot({ path: `${SHOTS}/catalogue-mobile-configure.png`, fullPage: true, caret: "initial" });
+  await page.evaluate(() => localStorage.setItem("reina-cart-v1", "[]")); await page.reload(); await page.waitForLoadState("networkidle");
+  await page.locator("article", { hasText: "Pizza pepperoni" }).first().getByRole("button", { name: /Ajouter au panier/ }).click();
+  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Burger", exact: true }) }).first().getByText("Double", { exact: true }).click();
+  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Burger", exact: true }) }).first().getByRole("button", { name: /Ajouter au panier/ }).click();
+  await page.locator("article").filter({ has: page.getByRole("heading", { name: "Wings", exact: true }) }).first().getByRole("button", { name: /Ajouter au panier/ }).click();
+  await page.goto(BASE + "/panier"); await page.getByText("Sous-total des produits").first().waitFor();
+  const ct = norm(await page.locator("main").innerText());
+  check("panier mixte : Taille S pour la pizza, « Double · à l'unité » et « Portion de 6 pièces » pour les autres, total 5 500 HTG, sélecteur de taille seulement pour la pizza", ct.includes("Taille S") && ct.includes("Double · à l'unité") && ct.includes("Portion de 6 pièces") && ct.includes("5 500 HTG") && (await page.locator("main select").count()) === 0 && !/Taille (—|undefined|null)/.test(ct), ct);
+  await page.screenshot({ path: `${SHOTS}/panier-mixte-mobile.png`, fullPage: true, caret: "initial" });
+  await page.getByRole("link", { name: "Renseigner ma livraison" }).click(); await page.waitForURL("**/commander");
+  await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor();
+  await fillCustomer(page, { fullName: "Client Mixte" });
+  await page.selectOption("#f-paymentMethodId", { label: "MonCash" });
+  await submitOrder(page);
+  const mixToken = page.url().split("/").pop();
+  const mt = norm(await page.locator("section[aria-labelledby=detail]").innerText());
+  check("confirmation mixte : 3 lignes, libellés corrects, montants conservés, sous-total 5 500 HTG, frais à confirmer", (await page.locator("section[aria-labelledby=detail] li").count()) === 3 && mt.includes("Pizza pepperoni · Taille S") && mt.includes("Burger · Double · à l'unité") && mt.includes("Wings · Portion de 6 pièces") && mt.includes("2 200 HTG") && mt.includes("1 800 HTG") && mt.includes("5 500 HTG") && mt.includes("À confirmer"), mt);
+  const wm = norm(decodeURIComponent((await page.getByRole("link", { name: "Confirmer sur WhatsApp" }).getAttribute("href")).split("?text=")[1]));
+  check("WhatsApp mixte : lignes de chaque produit, aucune taille fictive, moyen de paiement MonCash, sous-total", wm.includes("• 1 × Pizza pepperoni — taille S — 1 500 HTG") && wm.includes("• 1 × Burger — Double · à l'unité — 2 200 HTG") && wm.includes("• 1 × Wings — portion de 6 pièces — 1 800 HTG") && wm.includes("Sous-total : 5 500 HTG") && wm.includes("Moyen souhaité : MonCash") && !/Burger — taille|Wings — taille|taille undefined|taille null/.test(wm), wm);
+  check("commande mixte : enregistrée, paiement « à organiser » (choix MonCash ≠ payé)", psql(`select payment_status || '|' || coalesce(payment_method,'') || '|' || (select count(*) from order_items where order_id = o.id) from orders o where access_token = '${mixToken}'`) === "to_arrange|MonCash|3" && psql(`select size is null from order_items where product_name = 'Burger' and order_id = (select id from orders where access_token = '${mixToken}')`) === "t");
+  await page.screenshot({ path: `${SHOTS}/confirmation-mixte-mobile.png`, fullPage: true, caret: "initial" });
+  const mixId = psql(`select id from orders where access_token = '${mixToken}'`);
+  await ap.goto(`${BASE}/admin/commandes/${mixId}`); await ap.waitForLoadState("networkidle");
+  const at = norm(await ap.locator("section[aria-labelledby=articles]").innerText());
+  check("admin : commande mixte lisible (taille pour la pizza, unité / portion pour les autres)", at.includes("Pizza pepperoni") && at.includes("Taille S") && at.includes("Double · à l'unité") && at.includes("Portion de 6 pièces"), at);
+  // prix ultérieurs : l'ancienne commande ne change pas
+  psql("update products set base_price_minor = 999900 where name = 'Burger'");
+  await page.goto(`${BASE}/commande/${mixToken}`); await page.waitForLoadState("networkidle");
+  check("modification de prix du catalogue : l'ancienne commande garde ses prix", norm(await page.locator("section[aria-labelledby=detail]").innerText()).includes("5 500 HTG"));
+  // visibilité : masquer Wings du catalogue
+  psql("update products set visible = false where name = 'Wings'");
+  await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
+  check("visibilité : Wings masqué disparaît du catalogue et de la navigation", (await page.locator("article").filter({ has: page.getByRole("heading", { name: "Wings", exact: true }) }).count()) === 0 && (await page.locator("nav[aria-label='Catégories'] a").allInnerTexts()).join("|") === "Tout|Pizzas|Burgers");
+  for (const [w, h, n] of [[360, 780, "mobile360"], [1280, 800, "desktop1280"], [1440, 900, "desktop1440"]]) {
+    const vc = await browser.newContext({ viewport: { width: w, height: h } }); const vp = await vc.newPage();
+    await vp.goto(BASE + "/menu"); await vp.waitForLoadState("networkidle");
+    check(`catalogue ${w} px : pas de défilement horizontal avec les catégories`, await noScroll(vp));
+    if (w === 1280) await vp.screenshot({ path: `${SHOTS}/catalogue-desktop.png`, fullPage: true, caret: "initial" });
+    await vc.close();
+  }
+  resetOther(); // état de départ : Burger et Wings non configurés (aucune donnée inventée laissée en base)
+  psql("update products set visible = true where product_type = 'other'");
 
   check("aucune erreur JS console côté client", errors.length === 0, errors.join(" | "));
   await browser.close();

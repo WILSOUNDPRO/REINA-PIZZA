@@ -47,7 +47,8 @@ export type OrderItemRow = {
   id: string;
   product_name: string;
   product_description: string;
-  size: string;
+  size: string | null;
+  option_label: string | null;
   unit_price_minor: number;
   quantity: number;
   extras: { id: string; name: string; price_minor: number }[];
@@ -150,9 +151,9 @@ export async function createOrder(sql: Sql, input: CheckoutInput): Promise<Creat
         if (!row) return null; // création concurrente avec la même clé
         let pos = 0;
         for (const l of cart.lines) {
-          await tx`insert into order_items (order_id, position, product_id, product_name, product_description, size,
+          await tx`insert into order_items (order_id, position, product_id, product_name, product_description, size, option_label,
               unit_price_minor, quantity, extras, line_total_minor, is_demo)
-            values (${row.id}, ${pos++}, ${l.productId}, ${l.productName}, ${l.productDescription}, ${l.size},
+            values (${row.id}, ${pos++}, ${l.productId}, ${l.productName}, ${l.productDescription}, ${l.size}, ${l.optionLabel},
               ${l.unitPriceMinor}, ${l.quantity}, ${tx.json(l.extras as never)}, ${l.lineTotalMinor}, ${l.isDemo})`;
         }
         await addEvent(tx, row.id, "created", "customer", null, "to_confirm", { delivery_mode: input.deliveryMode });

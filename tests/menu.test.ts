@@ -78,8 +78,11 @@ describe("tailles et prix", () => {
 });
 
 describe("disponibilité, archivage, suppression", () => {
-  it("l'indisponibilité retire le produit du catalogue public", async () => {
+  it("l'indisponibilité garde le produit visible mais non commandable ; masqué (visible = false) il disparaît", async () => {
     await setAvailability(sql, IDS.pizzaB, false);
+    const cat = (await getPublicCatalog(sql)).products;
+    expect(cat.map((p) => [p.id, p.state])).toEqual([[IDS.pizzaA, "orderable"], [IDS.pizzaB, "unavailable"]]);
+    await sql`update products set visible = false where id = ${IDS.pizzaB}`;
     expect((await getPublicCatalog(sql)).products.map((p) => p.id)).toEqual([IDS.pizzaA]);
     expect(await setAvailability(sql, "00000000-0000-0000-0000-000000000000", true)).toMatchObject({ ok: false, status: 404 });
   });

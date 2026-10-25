@@ -1,6 +1,7 @@
 import { formatMoney } from "./money";
 import { formatPhoneDisplay } from "./phone";
 import type { Currency } from "./constants";
+import { lineOption } from "./productSale";
 
 // Les liens WhatsApp ne contiennent JAMAIS le jeton d'accès à la commande.
 export function waLink(digits: string, text?: string): string {
@@ -31,7 +32,7 @@ export type MessageOrder = {
   payment_method: string | null;
   payment_method_note: string | null;
 };
-export type MessageItem = { product_name: string; size: string; quantity: number; line_total_minor: number; extras: { name: string }[] };
+export type MessageItem = { product_name: string; size?: string | null; option_label?: string | null; quantity: number; line_total_minor: number; extras: { name: string }[] };
 
 const plain = (s: string) => s.replace(/[  ]/g, " "); // espaces normaux dans le message
 
@@ -43,7 +44,8 @@ export function buildOrderMessage(o: MessageOrder, items: MessageItem[]): string
   L.push("Bonjour Reina Pizza 🍕", `Je souhaite confirmer ma commande n° ${o.ref}.`, "", "COMMANDE");
   for (const i of items) {
     const extras = i.extras.length ? ` (+ ${i.extras.map((e) => e.name).join(", ")})` : "";
-    L.push(`• ${i.quantity} × ${i.product_name} — taille ${i.size}${extras} — ${m(i.line_total_minor)}`);
+    const opt = lineOption(i, "message"); // « taille S » pour une pizza ; unité ou portion configurée sinon ; rien si aucune
+    L.push(`• ${i.quantity} × ${i.product_name}${opt ? ` — ${opt}` : ""}${extras} — ${m(i.line_total_minor)}`);
   }
   L.push("", `Sous-total : ${m(o.subtotal_minor)}`);
   L.push(`Livraison : ${feeKnown ? m(o.delivery_fee_minor!) : "À confirmer selon mon adresse"}`);

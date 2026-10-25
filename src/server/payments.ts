@@ -59,11 +59,11 @@ export async function startPayment(sql: Sql, token: string): Promise<StartPaymen
 
     // Disponibilité vérifiée juste avant le paiement.
     const unavailable = await tx<{ product_name: string; size: string }[]>`
-      select oi.product_name, oi.size from order_items oi
+      select oi.product_name, coalesce(oi.size, oi.option_label, '') as size from order_items oi
       left join products p on p.id = oi.product_id
       left join product_sizes s on s.product_id = oi.product_id and s.size = oi.size
       where oi.order_id = ${o.id} and (
-        p.id is null or not p.available or s.size is null or not s.available
+        p.id is null or not p.available or (oi.size is not null and (s.size is null or not s.available))
         or exists (select 1 from categories c where c.id = p.category_id and not c.active)
         or exists (select 1 from jsonb_array_elements(oi.extras) e left join extras x on x.id = (e->>'id')::uuid
                    where x.id is null or not x.available))`;
