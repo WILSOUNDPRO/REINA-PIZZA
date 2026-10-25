@@ -121,7 +121,7 @@ export async function saveProductAction(formData: FormData) {
     imageUrl = null;
   }
 
-  const variants = Array.from({ length: 8 }, (_, k) => ({ label: str(formData, `variant_${k}_label`), price: str(formData, `variant_${k}_price`) }));
+  const variants = Array.from({ length: 8 }, (_, k) => ({ label: str(formData, `variant_${k}_label`), price: str(formData, `variant_${k}_price`), pieces: str(formData, `variant_${k}_pieces`) }));
   const r = await saveProduct(getSql(), {
     id: editing ? id : undefined,
     name: str(formData, "name"),

@@ -3,7 +3,7 @@ import type { Size } from "@/lib/constants";
 import { isOtherConfigured, type ProductState, type SaleUnit } from "@/lib/productSale";
 
 export type CatalogSize = { size: Size; price_minor: number };
-export type CatalogVariant = { id: string; label: string; price_minor: number };
+export type CatalogVariant = { id: string; label: string; price_minor: number; pieces: number | null };
 export type CatalogProduct = {
   id: string;
   name: string;
@@ -35,7 +35,7 @@ export async function getPublicCatalog(sql: Sql) {
       coalesce((select json_agg(json_build_object('size', s.size, 'price_minor', s.price_minor)
           order by array_position(${sql.unsafe(SIZE_ORDER)}, s.size))
         from product_sizes s where s.product_id = p.id and s.available and s.price_minor > 0), '[]'::json) as sizes,
-      coalesce((select json_agg(json_build_object('id', v.id, 'label', v.label, 'price_minor', v.price_minor) order by v.position, v.label)
+      coalesce((select json_agg(json_build_object('id', v.id, 'label', v.label, 'price_minor', v.price_minor, 'pieces', v.pieces) order by v.position, v.label)
         from product_variants v where v.product_id = p.id and v.available and v.price_minor > 0), '[]'::json) as variants
     from products p left join categories c on c.id = p.category_id
     where p.visible and p.archived_at is null and (c.id is null or c.active)

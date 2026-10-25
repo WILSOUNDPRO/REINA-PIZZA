@@ -9,7 +9,7 @@ import { formatMoney } from "@/lib/money";
 import { defaultImageSrc, defaultImageSrcSet, ILLUSTRATION_LABEL } from "@/lib/productImage";
 import { SIZE_HINT } from "@/lib/labels";
 import { MAX_LINE_QUANTITY, SIZES, type Currency, type Size } from "@/lib/constants";
-import { unitLabel } from "@/lib/productSale";
+import { minPriceMinor, unitLabel, variantOptionLabel, variantRequired } from "@/lib/productSale";
 import type { CatalogExtra, CatalogProduct } from "@/server/catalog";
 
 function isLocalHost(url: string) {
@@ -159,8 +159,11 @@ function OtherCard({ p, currency, orderable }: { p: CatalogProduct; currency: Cu
   const [added, setAdded] = useState(false);
   const unit = unitLabel(p.sale_unit, p.pieces_per_portion);
   const variant = p.variants.find((v) => v.id === variantId);
-  const price = variant ? variant.price_minor : p.base_price_minor!;
-  const canOrder = orderable && p.state === "orderable";
+  const required = variantRequired(p); // sans prix de base : choix de portion obligatoire, aucune sélection par défaut
+  const price = variant ? variant.price_minor : p.base_price_minor ?? 0;
+  const choiceMissing = required && !variant;
+  const canOrder = orderable && p.state === "orderable" && !choiceMissing;
+  const shownUnit = variant ? variantOptionLabel(p.sale_unit, p.pieces_per_portion, variant) : unit;
 
   function onAdd() {
     add({ productId: p.id, variantId: variantId || undefined, quantity: qty, extraIds: [] });
@@ -177,12 +180,17 @@ function OtherCard({ p, currency, orderable }: { p: CatalogProduct; currency: Cu
           {p.ingredients && <p className="mt-1 text-sm text-ink-soft"><strong>Ingrédients : </strong>{p.ingredients}</p>}
           {p.state === "unavailable" && <span className="badge mt-2 bg-stone-200 text-stone-800">Indisponible</span>}
         </div>
-        <p><span className="text-2xl font-extrabold text-tomato">{formatMoney(price, currency)}</span> <span className="text-sm text-ink-soft">· {cap(unit)}</span></p>
+        <p>
+          {choiceMissing
+            ? <span className="text-2xl font-extrabold text-tomato">À partir de {formatMoney(minPriceMinor(p) ?? 0, currency)}</span>
+            : <span className="text-2xl font-extrabold text-tomato">{formatMoney(price, currency)}</span>}
+          {!choiceMissing && <span className="text-sm text-ink-soft"> · {cap(shownUnit)}</span>}
+        </p>
         {p.variants.length > 0 && (
           <fieldset>
-            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">Variante</legend>
+            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">{required ? "Choisissez votre portion" : "Variante"}</legend>
             <div className="flex flex-wrap gap-2">
-              {[{ id: "", label: "Standard", price_minor: p.base_price_minor! }, ...p.variants].map((v) => (
+              {[...(required ? [] : [{ id: "", label: "Standard", price_minor: p.base_price_minor ?? 0 }]), ...p.variants].map((v) => (
                 <label key={v.id || "std"} className={`min-w-[5rem] cursor-pointer rounded-xl border px-3 py-2 text-center transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-[3px] has-[:focus-visible]:outline-basil ${variantId === v.id ? "border-tomato bg-tomato text-white" : "border-[#cfc8bd] bg-white hover:border-ink"}`}>
                   <input type="radio" name={`variant-${p.id}`} className="sr-only" checked={variantId === v.id} onChange={() => setVariantId(v.id)} />
                   <span className="block text-sm font-bold">{v.label}</span>
@@ -199,7 +207,7 @@ function OtherCard({ p, currency, orderable }: { p: CatalogProduct; currency: Cu
             <button type="button" className="stepper-btn" onClick={() => setQty((q) => Math.min(MAX_LINE_QUANTITY, q + 1))} aria-label={`Ajouter un ${p.name}`}><Plus size={18} aria-hidden="true" /></button>
           </div>
           <button type="button" onClick={onAdd} disabled={!canOrder} className={`btn min-w-0 flex-1 ${added ? "btn-basil" : "btn-primary"}`}>
-            {added ? <><Check size={18} aria-hidden="true" />Ajouté</> : p.state === "unavailable" ? "Indisponible" : <>Ajouter au panier · {formatMoney(price * qty, currency)}</>}
+            {added ? <><Check size={18} aria-hidden="true" />Ajouté</> : p.state === "unavailable" ? "Indisponible" : choiceMissing ? "Choisissez une portion" : <>Ajouter au panier · {formatMoney(price * qty, currency)}</>}
           </button>
         </div>
         <p className="sr-only" role="status">{added ? `${p.name} ajouté au panier` : ""}</p>

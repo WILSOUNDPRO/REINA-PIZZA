@@ -23,18 +23,18 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
   const isNew = id === "nouveau";
   let p: P | undefined;
   let sizes: { size: string; price_minor: number; available: boolean }[] = [];
-  let variants: { label: string; price_minor: number }[] = [];
+  let variants: { label: string; price_minor: number; pieces: number | null }[] = [];
   if (!isNew) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
     [p] = await sql<P[]>`select default_image, id, name, description, ingredients, image_url, available, visible, position, is_demo, category_id, product_type, sale_unit, base_price_minor, pieces_per_portion from products where id = ${id}`;
     if (!p) notFound();
     sizes = await sql`select size, price_minor, available from product_sizes where product_id = ${id}`;
-    variants = await sql`select label, price_minor from product_variants where product_id = ${id} order by position, label`;
+    variants = await sql`select label, price_minor, pieces from product_variants where product_id = ${id} order by position, label`;
   }
   const type: "pizza" | "other" = p?.product_type ?? (sp.type === "other" ? "other" : "pizza");
   const [cats, settings] = await Promise.all([sql<{ id: string; name: string }[]>`select id, name from categories order by position, name`, getSettings(sql)]);
   const cur = settings.currency ?? "HTG";
-  const configured = p ? (type === "other" ? isOtherConfigured(p) : sizes.some((s) => s.available && s.price_minor > 0)) : false;
+  const configured = p ? (type === "other" ? isOtherConfigured({ ...p, variants }) : sizes.some((s) => s.available && s.price_minor > 0)) : false;
 
   return (
     <div className="max-w-2xl space-y-5">
@@ -81,7 +81,7 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
             <legend className="px-1 text-sm font-bold">Vente et prix</legend>
             <p className="text-xs text-ink-soft">Les tailles S à XXL ne s'appliquent pas à ce produit. Aucun prix ni nombre de pièces n'est préchargé.</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm font-bold">Prix ({cur})<input name="basePrice" inputMode="decimal" defaultValue={minorToInput(p?.base_price_minor)} placeholder="Non défini" className="field mt-1" /></label>
+              <label className="block text-sm font-bold">Prix ({cur}) <span className="font-normal text-ink-soft">— facultatif si des variantes sont tarifées</span><input name="basePrice" inputMode="decimal" defaultValue={minorToInput(p?.base_price_minor)} placeholder="Non défini" className="field mt-1" /></label>
               <label className="block text-sm font-bold">Unité de vente
                 <select name="saleUnit" defaultValue={p?.sale_unit ?? ""} className="field mt-1">
                   <option value="">Non définie</option>
@@ -95,10 +95,11 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
             </div>
             <div className="space-y-2">
               <p className="text-sm font-bold">Variantes (facultatif) — chacune avec son propre prix</p>
-              <p className="text-xs text-ink-soft">Le produit se vend très bien sans variante. Avec des variantes, le client choisit « Standard » (prix ci-dessus) ou l'une d'elles.</p>
+              <p className="text-xs text-ink-soft">Le produit se vend très bien sans variante. Avec un prix ci-dessus, le client choisit « Standard » ou une variante. Sans prix de base, le client doit choisir une variante (ex. portion de 6 ou 12 pièces) et la carte affiche « À partir de » le prix le plus bas. « Pièces » : seulement pour une vente par portion.</p>
               {Array.from({ length: 4 }, (_, k) => (
-                <div key={k} className="grid grid-cols-[1fr_8rem] gap-2">
+                <div key={k} className="grid grid-cols-[1fr_5rem_8rem] gap-2">
                   <input name={`variant_${k}_label`} defaultValue={variants[k]?.label ?? ""} maxLength={40} placeholder={`Variante ${k + 1}`} aria-label={`Nom de la variante ${k + 1}`} className="field" />
+                  <input name={`variant_${k}_pieces`} inputMode="numeric" defaultValue={variants[k]?.pieces ?? ""} placeholder="Pièces" aria-label={`Nombre de pièces de la variante ${k + 1}`} className="field" />
                   <input name={`variant_${k}_price`} inputMode="decimal" defaultValue={minorToInput(variants[k]?.price_minor)} placeholder="Prix" aria-label={`Prix de la variante ${k + 1}`} className="field" />
                 </div>
               ))}

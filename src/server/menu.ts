@@ -22,11 +22,11 @@ export type AdminProduct = {
   pieces_per_portion: number | null;
   ingredients: string | null;
   visible: boolean;
-  variants: { id: string; label: string; price_minor: number; available: boolean }[];
+  variants: { id: string; label: string; price_minor: number; available: boolean; pieces: number | null }[];
 };
 
 /** Produit hors pizza : configuré = prix valide + unité de vente. Pizza : au moins une taille tarifée. */
-export const isProductConfigured = (p: Pick<AdminProduct, "product_type" | "sizes" | "sale_unit" | "base_price_minor">) =>
+export const isProductConfigured = (p: Pick<AdminProduct, "product_type" | "sizes" | "sale_unit" | "base_price_minor" | "variants">) =>
   p.product_type === "pizza" ? p.sizes.some((s) => s.available && s.price_minor > 0) : isOtherConfigured(p);
 
 export const isPriced = (s: AdminSize) => s.available && s.price_minor > 0;
@@ -39,7 +39,7 @@ export async function listAdminProducts(sql: Sql, f: { q?: string; dispo?: Avail
   const rows = await sql<AdminProduct[]>`
     select p.id, p.name, p.description, p.image_url, p.default_image, p.available, (p.archived_at is not null) as archived, p.is_demo,
       p.product_type, p.sale_unit, p.base_price_minor, p.pieces_per_portion, p.ingredients, p.visible,
-      coalesce((select json_agg(json_build_object('id', v.id, 'label', v.label, 'price_minor', v.price_minor, 'available', v.available) order by v.position, v.label)
+      coalesce((select json_agg(json_build_object('id', v.id, 'label', v.label, 'price_minor', v.price_minor, 'available', v.available, 'pieces', v.pieces) order by v.position, v.label)
         from product_variants v where v.product_id = p.id), '[]'::json) as variants,
       c.name as category_name,
       (select count(*)::int from order_items i where i.product_id = p.id) as orders_count,
@@ -69,10 +69,11 @@ export type MenuResult<T = unknown> = { ok: true; data?: T } | { ok: false; mess
 export async function setAvailability(sql: Sql, id: string, available: boolean): Promise<MenuResult> {
   return sql.begin(async (tx) => {
     const [p] = await tx<{ archived_at: Date | null; product_type: string; sale_unit: SaleUnit | null; base_price_minor: number | null }[]>`select archived_at, product_type, sale_unit, base_price_minor from products where id = ${id} for update`;
+    const vs = p ? await tx<{ price_minor: number; available: boolean }[]>`select price_minor, available from product_variants where product_id = ${id}` : [];
     if (!p) return { ok: false, message: "Produit introuvable.", status: 404 } as const;
     if (p.archived_at) return { ok: false, message: "Ce produit est archivé : restaurez-le d'abord.", status: 409 } as const;
     if (available && p.product_type === "other") {
-      if (!isOtherConfigured(p)) return { ok: false, message: "Renseignez le prix et l'unité de vente avant d'activer ce produit.", status: 409 } as const;
+      if (!isOtherConfigured({ ...p, variants: vs })) return { ok: false, message: "Renseignez le prix et l'unité de vente avant d'activer ce produit.", status: 409 } as const;
     } else if (available) {
       const [{ n }] = await tx<{ n: number }[]>`select count(*)::int as n from product_sizes where product_id = ${id} and available and price_minor > 0`;
       if (n === 0) return { ok: false, message: "Ajoutez au moins une taille avec un prix avant de rendre ce produit disponible.", status: 409 } as const;
@@ -155,7 +156,7 @@ export type ProductInput = {
   basePrice?: string; // autres produits, en HTG (« 1 500 », « 1250,50 »)
   saleUnit?: string;  // "", "unit" ou "portion"
   pieces?: string;
-  variants?: { label: string; price: string }[];
+  variants?: { label: string; price: string; pieces?: string }[];
 };
 
 const uuid = /^[0-9a-f-]{36}$/i;
@@ -182,7 +183,7 @@ export async function saveProduct(sql: Sql, i: ProductInput): Promise<MenuResult
   let basePrice: number | null = null;
   let saleUnit: SaleUnit | null = null;
   let pieces: number | null = null;
-  const variants: { label: string; price: number }[] = [];
+  const variants: { label: string; price: number; pieces: number | null }[] = [];
 
   if (type === "pizza") {
     for (const size of SIZES) {
@@ -217,10 +218,16 @@ export async function saveProduct(sql: Sql, i: ProductInput): Promise<MenuResult
       if (!label || label.length > 40) errors[`variant_${k}`] = "Chaque variante a un nom (40 caractères maximum) et un prix.";
       else if (m === null || m <= 0 || m > 100_000_000) errors[`variant_${k}`] = `Prix invalide pour la variante « ${label} » (strictement supérieur à 0).`;
       else if (seen.has(label.toLowerCase())) errors[`variant_${k}`] = `La variante « ${label} » existe déjà.`;
-      else { seen.add(label.toLowerCase()); variants.push({ label, price: m }); }
+      else {
+        const rawN = (v.pieces ?? "").trim();
+        const n = rawN ? (/^\d{1,3}$/.test(rawN) ? parseInt(rawN, 10) : NaN) : null;
+        if (n !== null && !(n >= 1 && n <= 200)) errors[`variant_${k}`] = `Nombre de pièces invalide pour la variante « ${label} » (entre 1 et 200).`;
+        else if (n !== null && saleUnit !== "portion") errors[`variant_${k}`] = "Le nombre de pièces d'une variante ne s'applique qu'à une vente par portion.";
+        else { seen.add(label.toLowerCase()); variants.push({ label, price: m, pieces: n }); }
+      }
     }
     if (variants.length > 8) errors.variants = "8 variantes au maximum.";
-    if (i.available && !(basePrice && saleUnit) && !Object.keys(errors).length) errors.available = "Renseignez le prix et l'unité de vente avant d'activer ce produit.";
+    if (i.available && !isOtherConfigured({ sale_unit: saleUnit, base_price_minor: basePrice, variants: variants.map((v) => ({ price_minor: v.price })) }) && !Object.keys(errors).length) errors.available = "Renseignez le prix et l'unité de vente avant d'activer ce produit.";
   }
   if (Object.keys(errors).length) return { ok: false, message: Object.values(errors)[0], errors, status: 422 };
 
@@ -249,8 +256,8 @@ export async function saveProduct(sql: Sql, i: ProductInput): Promise<MenuResult
     } else {
       let pos = 0;
       for (const v of variants) {
-        await tx`insert into product_variants (product_id, label, price_minor, position, available) values (${pid}, ${v.label}, ${v.price}, ${pos++}, true)
-          on conflict (product_id, label) do update set price_minor = excluded.price_minor, position = excluded.position, available = true`;
+        await tx`insert into product_variants (product_id, label, price_minor, position, available, pieces) values (${pid}, ${v.label}, ${v.price}, ${pos++}, true, ${v.pieces})
+          on conflict (product_id, label) do update set price_minor = excluded.price_minor, position = excluded.position, available = true, pieces = excluded.pieces`;
       }
       const labels = variants.map((v) => v.label);
       if (labels.length) await tx`delete from product_variants where product_id = ${pid} and label not in ${tx(labels)}`;

@@ -35,7 +35,7 @@ insert into categories (name, position) select 'Wings', 3 where not exists (sele
 -- Non configurés (sans prix ni unité), non commandables (available = false), avec leur illustration par défaut.
 insert into products (category_id, name, description, position, product_type, available, default_image, is_demo)
 select (select id from categories where lower(name) = 'burgers' order by position limit 1), 'Burger', '', 10, 'other', false, 'burger', false
-where not exists (select 1 from products where lower(name) = 'burger' or default_image = 'burger');
+where not exists (select 1 from products where lower(name) in ('burger', 'burger + frites') or default_image in ('burger', 'burger-frites'));
 insert into products (category_id, name, description, position, product_type, available, default_image, is_demo)
 select (select id from categories where lower(name) = 'wings' order by position limit 1), 'Wings', '', 11, 'other', false, 'wings', false
-where not exists (select 1 from products where lower(name) = 'wings' or default_image = 'wings');
+where not exists (select 1 from products where lower(name) in ('wings', 'wings bbq') or default_image = 'wings');

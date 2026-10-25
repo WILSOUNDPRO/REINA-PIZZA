@@ -1,7 +1,7 @@
 import type { Sql, Tx } from "./db";
 import type { CartItemInput } from "@/lib/validation";
 import type { Size } from "@/lib/constants";
-import { isOtherConfigured, unitLabel, type SaleUnit } from "@/lib/productSale";
+import { isOtherConfigured, unitLabel, variantOptionLabel, variantRequired, type SaleUnit } from "@/lib/productSale";
 
 export type PricedLine = {
   key: string;
@@ -23,7 +23,7 @@ export type CartProblem = {
   key: string;
   productId: string;
   size: Size | null;
-  reason: "unavailable" | "size_unavailable" | "extra_unavailable" | "not_configured" | "variant_unavailable";
+  reason: "unavailable" | "size_unavailable" | "extra_unavailable" | "not_configured" | "variant_unavailable" | "variant_required";
 };
 export type PricedCart = { lines: PricedLine[]; subtotalMinor: number; problems: CartProblem[]; hasDemo: boolean };
 
@@ -55,8 +55,8 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
     from products p left join categories c on c.id = p.category_id where p.id in ${sql(productIds)}`;
   const sizes = await sql<{ product_id: string; size: Size; price_minor: number; available: boolean }[]>`
     select product_id, size, price_minor, available from product_sizes where product_id in ${sql(productIds)}`;
-  const variants = await sql<{ id: string; product_id: string; label: string; price_minor: number; available: boolean }[]>`
-    select id, product_id, label, price_minor, available from product_variants where product_id in ${sql(productIds)}`;
+  const variants = await sql<{ id: string; product_id: string; label: string; price_minor: number; available: boolean; pieces: number | null }[]>`
+    select id, product_id, label, price_minor, available, pieces from product_variants where product_id in ${sql(productIds)}`;
   const extras = extraIds.length
     ? await sql<{ id: string; name: string; price_minor: number; available: boolean; is_demo: boolean }[]>`
         select id, name, price_minor, available, is_demo from extras where id in ${sql(extraIds)}`
@@ -66,7 +66,9 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
   const problems: CartProblem[] = [];
   for (const [key, it] of merged) {
     const prob = (reason: CartProblem["reason"]) => problems.push({ key, productId: it.productId, size: it.size ?? null, reason });
-    const p = products.find((x) => x.id === it.productId);
+    const p0 = products.find((x) => x.id === it.productId);
+    const pv = variants.filter((v) => v.product_id === it.productId);
+    const p = p0 && { ...p0, variants: pv };
     if (p && p.product_type === "other" && !isOtherConfigured(p) && p.visible && !p.archived_at) { prob("not_configured"); continue; } // « Bientôt disponible »
     if (!p || !p.available || !p.visible || p.archived_at || p.cat_active === false) { prob("unavailable"); continue; }
 
@@ -84,14 +86,15 @@ export async function priceCart(sql: Sql | Tx, items: CartItemInput[]): Promise<
       if (it.size || it.extraIds.length > 0) { prob(it.size ? "size_unavailable" : "extra_unavailable"); continue; } // pas de taille de pizza ni de supplément
       if (!isOtherConfigured(p)) { prob("not_configured"); continue; }
       const u = unitLabel(p.sale_unit, p.pieces_per_portion)!;
-      unit = p.base_price_minor!;
-      optionLabel = u;
+      unit = p.base_price_minor ?? 0;
+      optionLabel = p.sale_unit === "unit" ? null : u; // « à l'unité » va de soi : pas de mention superflue sur la ligne
+      if (!it.variantId && variantRequired(p)) { prob("variant_required"); continue; } // ex. portion de 6 ou 12 pièces à choisir
       if (it.variantId) {
         const v = variants.find((x) => x.id === it.variantId && x.product_id === p.id);
         if (!v || !v.available || v.price_minor <= 0) { prob("variant_unavailable"); continue; }
         unit = v.price_minor;
         variantId = v.id;
-        optionLabel = `${v.label} · ${u}`;
+        optionLabel = variantOptionLabel(p.sale_unit, p.pieces_per_portion, v);
       }
     }
 

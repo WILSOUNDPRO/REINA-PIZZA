@@ -11,9 +11,31 @@ export function unitLabel(unit: SaleUnit | null, pieces: number | null): string 
   return null;
 }
 
-/** Un produit hors pizza n'est configuré que s'il a un prix valide ET une unité de vente. */
-export const isOtherConfigured = (p: { sale_unit: SaleUnit | null; base_price_minor: number | null }) =>
-  !!p.sale_unit && !!p.base_price_minor && p.base_price_minor > 0;
+type PricedVariant = { price_minor: number; available?: boolean };
+const usable = (variants?: PricedVariant[]) => (variants ?? []).filter((v) => v.price_minor > 0 && v.available !== false);
+
+/**
+ * Un produit hors pizza n'est configuré que s'il a une unité de vente ET un prix valide :
+ * soit un prix de base, soit au moins une variante tarifée (cas d'un choix de portion obligatoire, sans prix de base).
+ */
+export const isOtherConfigured = (p: { sale_unit: SaleUnit | null; base_price_minor: number | null; variants?: PricedVariant[] }) =>
+  !!p.sale_unit && ((!!p.base_price_minor && p.base_price_minor > 0) || usable(p.variants).length > 0);
+
+/** Sans prix de base, le client doit choisir une variante (ex. portion de 6 ou de 12 pièces) : aucune sélection par défaut. */
+export const variantRequired = (p: { base_price_minor: number | null; variants?: PricedVariant[] }) =>
+  !(p.base_price_minor && p.base_price_minor > 0) && usable(p.variants).length > 0;
+
+/** Prix le plus bas proposé (pour « À partir de … »). */
+export const minPriceMinor = (p: { base_price_minor: number | null; variants?: PricedVariant[] }): number | null => {
+  const all = [...(p.base_price_minor && p.base_price_minor > 0 ? [p.base_price_minor] : []), ...usable(p.variants).map((v) => v.price_minor)];
+  return all.length ? Math.min(...all) : null;
+};
+
+/** Libellé d'une option commandée : « portion de 6 pièces » si le nombre de pièces est connu, sinon « Double · à l'unité ». */
+export function variantOptionLabel(unit: SaleUnit | null, productPieces: number | null, v: { label: string; pieces?: number | null }): string {
+  if (unit === "portion" && v.pieces) return unitLabel("portion", v.pieces)!;
+  return `${v.label} · ${unitLabel(unit, productPieces)}`;
+}
 
 /** Libellé d'une ligne : « Taille S » pour une pizza, l'unité ou la portion configurée sinon. Jamais de taille vide ou fictive. */
 export function lineOption(i: { size?: string | null; option_label?: string | null }, style: "ui" | "message" = "ui"): string {

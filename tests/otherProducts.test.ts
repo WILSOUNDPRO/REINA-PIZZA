@@ -39,7 +39,7 @@ describe("migration Burger et Wings", () => {
 
   it("les images par défaut existent (PNG d'origine + WebP 480/800/1200) et sont en 4:3", async () => {
     const sharp = (await import("sharp")).default;
-    for (const slug of ["burger", "wings"]) {
+    for (const slug of ["burger", "burger-frites", "wings"]) {
       expect(fs.existsSync(`public/images/products/${slug}.png`)).toBe(true);
       for (const f of [`${slug}-480.webp`, `${slug}-800.webp`, `${slug}.webp`]) {
         const m = await sharp(`public/images/products/${f}`).metadata();
@@ -95,11 +95,11 @@ describe("commande : vérification côté serveur", () => {
     // pizza A S = 1 000 ; burger ×(2+1 fusionnés) = 3 × 1 500 = 4 500 ; wings = 1 800  →  7 300 HTG
     expect(order.subtotal_minor).toBe(100000 + 450000 + 180000);
     expect(items.map((i) => [i.product_name, i.size, i.option_label, i.quantity, i.line_total_minor])).toEqual([
-      ["Pizza A", "S", null, 1, 100000], ["Burger", null, "à l'unité", 3, 450000], ["Wings", null, "portion de 6 pièces", 1, 180000],
+      ["Pizza A", "S", null, 1, 100000], ["Burger", null, null, 3, 450000], ["Wings", null, "portion de 6 pièces", 1, 180000],
     ]);
     const msg = buildOrderMessage(order, items);
     expect(msg).toContain("• 1 × Pizza A — taille S — 1 000 HTG");
-    expect(msg).toContain("• 3 × Burger — à l'unité — 4 500 HTG");
+    expect(msg).toContain("• 3 × Burger — 4 500 HTG");
     expect(msg).toContain("• 1 × Wings — portion de 6 pièces — 1 800 HTG");
     expect(msg).not.toMatch(/taille (null|undefined|\s|—)/);
     expect(msg).not.toMatch(/Burger — taille|Wings — taille/);
@@ -168,5 +168,104 @@ describe("administration : configuration et activation", () => {
     const { burger } = await seedOther();
     const list = await listAdminProducts(sql, {});
     expect(list.find((p) => p.id === burger)).toMatchObject({ product_type: "other", sale_unit: null, base_price_minor: null, visible: true, variants: [] });
+  });
+});
+
+describe("migration 7 : Burger + frites et Wings BBQ", () => {
+  const mig7 = fs.readFileSync("supabase/migrations/20260107000000_burger_frites_wings_bbq.sql", "utf8");
+  const apply = async () => { await sql.unsafe(mig); await sql.unsafe(mig7); };
+  const ids = async () => {
+    const rows = await sql`select id, name from products where product_type = 'other'`;
+    return { burger: rows.find((r) => r.name === "Burger + frites")!.id as string, wings: rows.find((r) => r.name === "Wings BBQ")!.id as string };
+  };
+
+  it("configure les deux produits (prix, unité, variantes), idempotente, sans doublon", async () => {
+    await apply();
+    await sql.unsafe(mig7);
+    await sql.unsafe(mig);
+    const rows = await sql`select name, sale_unit, base_price_minor, available, default_image, description from products where product_type = 'other' order by name`;
+    expect(rows.map((r) => [r.name, r.sale_unit, r.base_price_minor, r.available, r.default_image])).toEqual([
+      ["Burger + frites", "unit", 125000, true, "burger-frites"], ["Wings BBQ", "portion", null, true, "wings"],
+    ]);
+    expect(rows[0].description).toContain("frites");
+    expect(rows[0].description.toLowerCase()).not.toMatch(/cheddar|salade|tomate|oignon|cornichon/); // aucun ingrédient déduit de l'image
+    expect((await sql`select p.name, v.label, v.price_minor, v.pieces from product_variants v join products p on p.id = v.product_id order by v.position`).map((r) => [r.name, r.label, r.price_minor, r.pieces])).toEqual([
+      ["Wings BBQ", "6 pièces", 60000, 6], ["Wings BBQ", "12 pièces", 120000, 12],
+    ]);
+  });
+
+  it("n'écrase jamais une configuration ou une photo saisies par l'administrateur", async () => {
+    await sql.unsafe(mig);
+    const { burger } = await seedOther();
+    await sql`update products set image_url = 'https://exemple.test/photo.webp' where id = ${burger}`;
+    await saveProduct(sql, { id: burger, name: "Burger maison", basePrice: "1000", saleUnit: "unit", available: false, visible: true, description: "Ma description" });
+    await sql.unsafe(mig7);
+    expect(await sql`select name, description, base_price_minor, available, image_url, default_image from products where id = ${burger}`).toMatchObject([
+      { name: "Burger maison", description: "Ma description", base_price_minor: 100000, available: false, image_url: "https://exemple.test/photo.webp", default_image: "burger-frites" },
+    ]);
+  });
+
+  it("catalogue : « À partir de 600 HTG », sans prix de base ; portion obligatoire côté serveur", async () => {
+    await apply();
+    const { burger, wings } = await ids();
+    const cat = await getPublicCatalog(sql);
+    const w = cat.products.find((p) => p.id === wings)!;
+    expect(w).toMatchObject({ state: "orderable", base_price_minor: null });
+    expect(w.variants.map((v) => [v.label, v.price_minor, v.pieces])).toEqual([["6 pièces", 60000, 6], ["12 pièces", 120000, 12]]);
+    expect(cat.products.find((p) => p.id === burger)).toMatchObject({ state: "orderable", base_price_minor: 125000, variants: [] });
+    const r = await priceCart(sql, [item(wings)]);
+    expect(r.lines).toHaveLength(0);
+    expect(r.problems[0].reason).toBe("variant_required");
+    expect((await priceCart(sql, [item(wings, { variantId: crypto.randomUUID() })])).problems[0].reason).toBe("variant_unavailable");
+    expect((await priceCart(sql, [item(wings, { size: "S" })])).problems[0].reason).toBe("size_unavailable");
+  });
+
+  it("prix par portion, quantités et lignes distinctes pour 6 et 12 pièces", async () => {
+    await apply();
+    const { burger, wings } = await ids();
+    const v = Object.fromEntries((await sql`select id, pieces from product_variants`).map((r) => [r.pieces, r.id as string]));
+    const r = await priceCart(sql, [item(burger, { quantity: 2 }), item(wings, { variantId: v[6], quantity: 2 }), item(wings, { variantId: v[12] })]);
+    expect(r.problems).toHaveLength(0);
+    expect(r.lines.map((l) => [l.productName, l.optionLabel, l.quantity, l.lineTotalMinor])).toEqual([
+      ["Burger + frites", null, 2, 250000], ["Wings BBQ", "portion de 6 pièces", 2, 120000], ["Wings BBQ", "portion de 12 pièces", 1, 120000],
+    ]);
+    expect(r.subtotalMinor).toBe(490000);
+  });
+
+  it("commande mixte pizza / burger / wings : montants serveur, instantané conservé, message WhatsApp, anciennes commandes inchangées", async () => {
+    await apply();
+    const { burger, wings } = await ids();
+    const v = Object.fromEntries((await sql`select id, pieces from product_variants`).map((r) => [r.pieces, r.id as string]));
+    const created = await createOrder(sql, checkout({ deliveryMode: "quote", zoneId: undefined, items: [
+      { productId: IDS.pizzaA, size: "S", quantity: 1, extraIds: [] }, { productId: burger, quantity: 2, extraIds: [] },
+      { productId: wings, variantId: v[6], quantity: 2, extraIds: [] }, { productId: wings, variantId: v[12], quantity: 1, extraIds: [] },
+    ] }));
+    if (!created.ok) throw new Error(created.message);
+    const token = created.token;
+    const before = await sql`select product_name, option_label, unit_price_minor, quantity from order_items order by product_name, option_label`;
+    // le catalogue change ensuite : la commande garde ses prix et son option
+    await sql`update products set base_price_minor = 999900 where id = ${burger}`;
+    await sql`update product_variants set price_minor = 1 where pieces = 6`;
+    const { order, items } = (await getOrderByToken(sql, token))!;
+    expect(await sql`select product_name, option_label, unit_price_minor, quantity from order_items order by product_name, option_label`).toEqual(before);
+    expect(order.subtotal_minor).toBe(100000 + 250000 + 120000 + 120000);
+    const msg = buildOrderMessage(order, items);
+    expect(msg).toContain("• 2 × Burger + frites — 2 500 HTG");
+    expect(msg).toContain("• 2 × Wings BBQ — portion de 6 pièces — 1 200 HTG");
+    expect(msg).toContain("• 1 × Wings BBQ — portion de 12 pièces — 1 200 HTG");
+    expect(msg).toContain("• 1 × Pizza A — taille S — 1 000 HTG");
+  });
+});
+
+describe("administration : variantes avec nombre de pièces, sans prix de base", () => {
+  it("activable avec des variantes tarifées seules ; pièces de variante refusées hors portion", async () => {
+    const { wings } = await seedOther();
+    const base = { id: wings, name: "Wings BBQ", saleUnit: "portion", available: true, visible: true, variants: [{ label: "6 pièces", price: "600", pieces: "6" }, { label: "12 pièces", price: "1 200", pieces: "12" }] };
+    expect(await saveProduct(sql, base)).toMatchObject({ ok: true });
+    expect(await sql`select base_price_minor, available from products where id = ${wings}`).toMatchObject([{ base_price_minor: null, available: true }]);
+    expect((await sql`select label, pieces from product_variants where product_id = ${wings} order by position`).map((r) => [r.label, r.pieces])).toEqual([["6 pièces", 6], ["12 pièces", 12]]);
+    expect(await saveProduct(sql, { ...base, saleUnit: "unit" })).toMatchObject({ ok: false });
+    expect(await saveProduct(sql, { ...base, variants: [{ label: "6 pièces", price: "600", pieces: "0" }] })).toMatchObject({ ok: false });
+    expect(await saveProduct(sql, { ...base, variants: [] })).toMatchObject({ ok: false }); // plus aucun prix : activation refusée
   });
 });
