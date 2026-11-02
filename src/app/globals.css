@@ -137,3 +137,13 @@ body:has(.theme-noir) { background: #080808; }
   .theme-noir .card { backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
   .theme-noir .bg-tomato { color: #fff; }
 }
+
+/* Lisibilité du texte posé directement sur l'animation (voile léger) */
+.theme-noir .on-canvas { text-shadow: 0 2px 14px rgb(0 0 0 / .75), 0 0 2px rgb(0 0 0 / .6); }
+.theme-noir .glass { background: rgb(23 19 19 / .78); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgb(245 181 27 / .35); box-shadow: 0 10px 30px rgb(0 0 0 / .5), inset 0 1px 0 rgb(255 255 255 / .08); }
+.theme-noir .btn-hero-wa { background: rgb(23 19 19 / .78); backdrop-filter: blur(14px); border: 1.5px solid #f5b51b; border-radius: 9999px; color: #fff; }
+.theme-noir .btn-hero-wa:hover { background: rgb(32 26 26 / .92); box-shadow: 0 10px 25px rgb(245 181 27 / .35); transform: translateY(-2px); }
+@keyframes scroll-wheel { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(10px); } }
+.scroll-wheel { animation: scroll-wheel 1.6s ease-in-out infinite; }
+@keyframes fire { 0%, 100% { box-shadow: 0 0 0 0 rgb(245 181 27 / .6); } 50% { box-shadow: 0 0 0 6px rgb(245 181 27 / 0); } }
+.fire-dot { animation: fire 2s ease-in-out infinite; }

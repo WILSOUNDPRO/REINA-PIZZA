@@ -1,20 +1,19 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { Logo } from "./Logo";
 import { CartLink } from "./CartLink";
-
-const links = [["/menu", "Menu"], ["/#apropos", "À propos"], ["/#livraison", "Livraison"], ["/#contact", "Contact"]] as const;
+import { NavLinks } from "./NavLinks";
 
 export function SiteHeader() {
   return (
-    <header className="no-print sticky top-0 z-30 border-b border-line bg-cream/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:h-16">
-        <Link href="/" className="flex shrink-0 items-center gap-3 rounded-lg" aria-label="Reina Pizza, accueil"><span className="sm:hidden"><Logo size="sm" tagline={false} /></span><span className="hidden sm:block"><Logo /></span></Link>
-        <nav className="ml-auto flex items-center gap-1 text-sm font-semibold" aria-label="Navigation principale">
-          {links.map(([href, label], i) => (
-            <Link key={href} href={href} className={`min-h-11 items-center rounded-lg px-3 hover:bg-cream-2 ${i === 0 ? "inline-flex" : "hidden sm:inline-flex"}`}>{label}</Link>
-          ))}
+    <header className="no-print sticky top-0 z-30 border-b border-line bg-cream/70 backdrop-blur-md">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:h-[4.5rem]">
+        <Link href="/" className="shrink-0 rounded-lg" aria-label="Reina Pizza, accueil"><span className="sm:hidden"><Logo size="sm" tagline={false} /></span><span className="hidden sm:block"><Logo /></span></Link>
+        <nav className="ml-auto flex items-center lg:ml-8 lg:mr-auto" aria-label="Navigation principale"><NavLinks /></nav>
+        <div className="flex items-center gap-2">
           <CartLink />
-        </nav>
+          <Link href="/menu" className="btn btn-primary hidden !rounded-full !px-5 lg:inline-flex">Commander<ArrowRight size={16} aria-hidden="true" /></Link>
+        </div>
       </div>
     </header>
   );
