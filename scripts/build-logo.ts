@@ -1,11 +1,11 @@
-// Prépare le logo officiel (design-originals/logo-reina-pizza.webp, fond noir) pour le site :
+// Prépare le logo officiel (design-originals/logo-reina-pizza.png, fond noir) pour le site :
 //  - versions à fond transparent (le noir devient transparent, fumée comprise), rognées autour du logo, en 300 et 600 px de large ;
 //  - image de partage 1200 × 630 (aperçu WhatsApp / réseaux) ; icône d'application (couronne et part de pizza).
 // Usage : npm run logo:build
 import sharp from "sharp";
 import path from "node:path";
 
-const SRC = path.join(process.cwd(), "design-originals", "logo-reina-pizza.webp");
+const SRC = path.join(process.cwd(), "design-originals", "logo-reina-pizza.png");
 const OUT = path.join(process.cwd(), "public", "brand");
 
 /** Fond noir → transparence : alpha = canal le plus lumineux, couleur re-normalisée (le texte et l'or restent intacts). */
