@@ -94,7 +94,9 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
     check("menu : Pizza pepperoni affiche discrètement « Photo d'illustration »", (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1); }
   for (const name of ["Pizza jambon", "Pizza hareng saur"]) {
     const card = page.locator("article", { hasText: name });
-    check(`menu : ${name} — pas d'image fournie : emplacement discret, aucune image d'un autre produit, pas de mention « illustration »`, (await card.locator("img").count()) === 0 && (await card.locator("div[role=img]").count()) === 1 && (await card.getByText("Photo d'illustration", { exact: true }).count()) === 0);
+    await card.scrollIntoViewIfNeeded();
+    await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
+    check(`menu : ${name} — même image que le pepperoni (/images/products/pepperoni*), « Photo d'illustration », 4:3`, (await card.locator("img").first().evaluate((i) => i.currentSrc.includes("/images/products/pepperoni") && i.naturalWidth > 0 && Math.abs(i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height - 4 / 3) < 0.02)) && (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1);
   }
   check("menu : aucune ancienne image (ni /images/pizzas, ni /brand) chargée", (await page.locator("img[src*='/images/pizzas'], img[src*='/brand']").count()) === 0 && (await fetch(BASE + "/images/pizzas/pepperoni-480.webp")).status === 404 && (await fetch(BASE + "/brand/logo.png")).status === 404);
   check("menu : pas de défilement horizontal", await noScroll(page));

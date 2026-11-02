@@ -447,14 +447,15 @@ describe("visuels par défaut", () => {
     expect(rows.map((r) => [r.name, r.default_image])).toEqual([["Pizza pepperoni", "pepperoni"], ["Pizza jambon", "perso"], ["Pizza hareng saur", "hareng-saur"]]);
     expect(rows.every((r) => r.description === "")).toBe(true); // aucune description inventée
   });
-  it("les visuels par défaut viennent du nouveau site : fichiers présents pour pepperoni, burger + frites et wings ; aucun ancien visuel ; rien d'emprunté pour jambon et hareng saur", () => {
+  it("les visuels par défaut viennent du nouveau site : fichiers présents pour pepperoni, burger + frites et wings ; aucun ancien visuel ; jambon et hareng saur partagent l'image du pepperoni (décision du propriétaire)", () => {
     for (const slug of ["pepperoni", "burger-frites", "wings"]) {
       expect(hasDefaultImage(slug), slug).toBe(true);
       const d = defaultImage(slug);
       expect(fs.existsSync(`public${d.src}`), d.src).toBe(true);
       for (const part of d.srcSet.split(", ")) expect(fs.existsSync(`public${part.split(" ")[0]}`), part).toBe(true);
     }
-    for (const slug of ["jambon", "hareng-saur", "burger", null]) expect(hasDefaultImage(slug), String(slug)).toBe(false);
+    for (const slug of ["burger", "autre", null]) expect(hasDefaultImage(slug), String(slug)).toBe(false);
+    for (const slug of ["jambon", "hareng-saur"]) { expect(hasDefaultImage(slug), slug).toBe(true); expect(defaultImage(slug)).toEqual(defaultImage("pepperoni")); }
     expect(fs.existsSync("public/images/pizzas")).toBe(false);
     expect(fs.existsSync("public/brand")).toBe(false);
   });
