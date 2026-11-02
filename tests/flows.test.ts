@@ -459,7 +459,7 @@ describe("visuels par défaut", () => {
     expect(fs.existsSync("public/images/pizzas")).toBe(false);
     for (const old of ["logo.png", "symbol.png", "logo-or.png", "symbol-or.png"]) expect(fs.existsSync(`public/brand/${old}`), old).toBe(false); // anciens logos
     for (const f of ["logo-reina-pizza-300.webp", "logo-reina-pizza-600.webp", "og-logo.jpg"]) expect(fs.existsSync(`public/brand/${f}`), f).toBe(true);
-    expect(fs.existsSync("design-originals/logo-reina-pizza.webp")).toBe(true);
+    expect(fs.existsSync("design-originals/logo-reina-pizza.png")).toBe(true);
   });
   it("le panier chiffré côté serveur expose l'illustration, et l'image de l'admin prime", async () => {
     await sql`update products set default_image = 'pepperoni' where id = ${IDS.pizzaA}`;
