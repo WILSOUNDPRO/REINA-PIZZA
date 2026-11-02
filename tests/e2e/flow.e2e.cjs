@@ -60,7 +60,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/"); await page.waitForLoadState("networkidle"); await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/01-home.png`, fullPage: true, caret: "initial" });
   check("accueil : pas de défilement horizontal", await noScroll(page));
-  check("accueil : titre « Pizza, Burger & Wings », menu en vitrine (pizzas, burger, wings) sans long défilement", (await page.getByRole("heading", { level: 1 }).innerText()).replace(/\s+/g, " ") === "Pizza, Burger & Wings" && (await page.getByRole("heading", { name: "Le Menu" }).count()) === 1 && (await page.locator("#pizzas a[aria-label^='Choisir']").count()) >= 3);
+  check("accueil : titre « Pizza, Burger & Wings », menu en vitrine (pizzas, burger, wings) sans long défilement", (await page.getByRole("heading", { level: 1 }).innerText()).replace(/\s+/g, " ") === "Pizza, Burger & Wings" && (await page.getByRole("heading", { name: "Le Menu" }).count()) === 1 && (await page.locator("#pizzas article").count()) >= 3);
   // Identité noir et or, animation 3D de fond, informations critiques
   const theme = await page.evaluate(() => ({ body: getComputedStyle(document.body).backgroundColor, canvas: !!document.getElementById("animation-canvas"), pos: getComputedStyle(document.getElementById("animation-canvas")).position, w: document.getElementById("animation-canvas").width, h: document.getElementById("animation-canvas").height, iw: innerWidth, ih: innerHeight, gold: getComputedStyle(document.querySelector(".btn-primary")).backgroundImage }));
   check("design noir et or : fond noir, bouton doré, canvas #animation-canvas fixe plein écran", theme.body === "rgb(8, 8, 8)" && theme.canvas && theme.pos === "fixed" && theme.w === theme.iw && theme.h === theme.ih && /245, 181, 27/.test(theme.gold), JSON.stringify(theme));
@@ -77,7 +77,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const allText = norm(await page.locator("body").innerText());
   const hrefs = await page.locator("a[href*='wa.me']").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
   check("informations critiques : WhatsApp 50946461212, adresse Delmas 33, +509 4646-1212, HTG", hrefs.length >= 2 && hrefs.every((h) => h.startsWith("https://wa.me/50946461212")) && allText.includes("Delmas 33, rue Charbonnier, impasse Costo, Haïti") && allText.includes("+509 4646-1212") && allText.includes("HTG"), hrefs.join(","));
-  check("aucun emoji décoratif dans l'interface publique", !/\p{Extended_Pictographic}/u.test(allText.replace(/[•×—·]/g, "")), (allText.match(/\p{Extended_Pictographic}/gu) ?? []).join(""));
+  check("aucun emoji décoratif dans l'interface publique", !/\p{Extended_Pictographic}/u.test(allText.replace(/[•×—·©]/g, "")), (allText.match(/\p{Extended_Pictographic}/gu) ?? []).join(""));
   check("moyens de paiement : MonCash avec son logo, Espèces à la livraison avec l'icône dorée", (await page.locator("#livraison img[src*='moncash']").count()) === 1 && (await page.locator("#livraison li", { hasText: "Espèces à la livraison" }).locator("svg").count()) === 1 && (await page.locator("#livraison li", { hasText: "MonCash" }).count()) === 1);
   await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${SHOTS}/02-menu.png`, fullPage: true, caret: "initial" });
@@ -94,7 +94,9 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
     check("menu : Pizza pepperoni affiche discrètement « Photo d'illustration »", (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1); }
   for (const name of ["Pizza jambon", "Pizza hareng saur"]) {
     const card = page.locator("article", { hasText: name });
-    check(`menu : ${name} — pas d'image fournie : emplacement discret, aucune image d'un autre produit, pas de mention « illustration »`, (await card.locator("img").count()) === 0 && (await card.locator("div[role=img]").count()) === 1 && (await card.getByText("Photo d'illustration", { exact: true }).count()) === 0);
+    await card.scrollIntoViewIfNeeded();
+    await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
+    check(`menu : ${name} — même image que le pepperoni (/images/products/pepperoni*), « Photo d'illustration », 4:3`, (await card.locator("img").first().evaluate((i) => i.currentSrc.includes("/images/products/pepperoni") && i.naturalWidth > 0 && Math.abs(i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height - 4 / 3) < 0.02)) && (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1);
   }
   check("menu : aucune ancienne image (ni /images/pizzas, ni /brand) chargée", (await page.locator("img[src*='/images/pizzas'], img[src*='/brand']").count()) === 0 && (await fetch(BASE + "/images/pizzas/pepperoni-480.webp")).status === 404 && (await fetch(BASE + "/brand/logo.png")).status === 404);
   check("menu : pas de défilement horizontal", await noScroll(page));

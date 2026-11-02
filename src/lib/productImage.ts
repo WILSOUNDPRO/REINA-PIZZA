@@ -1,6 +1,7 @@
 // Visuels par défaut des produits : images du nouveau site, WebP en 4:3 stockées localement (sources dans design-originals/, voir scripts/optimize-images.ts).
 // Une photo ajoutée par l'administrateur (image_url) remplace toujours l'illustration.
-// Un produit sans visuel fourni (ex. pizzas jambon et hareng saur) affiche un emplacement discret, jamais l'image d'un autre produit.
+// Sur décision du propriétaire, les pizzas jambon et hareng saur utilisent la même image d'illustration que la pizza pepperoni
+// (mention « Photo d'illustration ») jusqu'à l'ajout de leurs photos dans l'administration. Un produit sans visuel affiche un emplacement discret.
 export const ILLUSTRATION_LABEL = "Photo d'illustration";
 
 // Largeurs disponibles par visuel ; la plus grande porte le nom {slug}.webp, les autres {slug}-{largeur}.webp. Aucun agrandissement.
@@ -10,11 +11,15 @@ const DEFAULT_IMAGES: Record<string, readonly number[]> = {
   wings: [480],
 };
 
-export const hasDefaultImage = (slug: string | null | undefined): slug is string => !!slug && slug in DEFAULT_IMAGES;
+const ALIASES: Record<string, string> = { jambon: "pepperoni", "hareng-saur": "pepperoni" };
+const resolve = (slug: string) => ALIASES[slug] ?? slug;
+
+export const hasDefaultImage = (slug: string | null | undefined): slug is string => !!slug && resolve(slug) in DEFAULT_IMAGES;
 
 const src = (slug: string, w: number) => (w === Math.max(...DEFAULT_IMAGES[slug]) ? `/images/products/${slug}.webp` : `/images/products/${slug}-${w}.webp`);
 
-export function defaultImage(slug: string) {
+export function defaultImage(requested: string) {
+  const slug = resolve(requested);
   const widths = DEFAULT_IMAGES[slug];
   const max = Math.max(...widths);
   return {

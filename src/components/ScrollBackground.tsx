@@ -112,7 +112,7 @@ export function ScrollBackground() {
     <>
       <canvas ref={ref} id="animation-canvas" aria-hidden="true" className="no-print pointer-events-none fixed inset-0 z-0 h-dvh w-full bg-[#080808]" />
       {/* voile sombre : garantit la lisibilité du texte quelle que soit l'image affichée */}
-      <div aria-hidden="true" className="no-print pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgb(8_8_8/.55),rgb(8_8_8/.82))]" />
+      <div aria-hidden="true" className="no-print pointer-events-none fixed inset-0 z-0 bg-[radial-gradient(ellipse_at_center,rgb(8_8_8/.22),rgb(8_8_8/.6))]" />
     </>
   );
 }
