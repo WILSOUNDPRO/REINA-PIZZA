@@ -1,7 +1,7 @@
 import { WhatsAppIcon } from "@/components/WhatsAppIcon";
 import { ChefHat, ChevronRight, Clock, MapPin, Phone, Truck } from "lucide-react";
 import Link from "next/link";
-import { Logo } from "./Logo";
+import { LogoImage } from "./Logo";
 import { waLink } from "@/lib/whatsapp";
 import { normalizePhone } from "@/lib/phone";
 import type { Settings } from "@/server/settings";
@@ -20,7 +20,7 @@ export function SiteFooter({ s }: { s: Settings }) {
       </div>
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
         <div className="space-y-3">
-          <Logo size="lg" />
+          <LogoImage large className="h-28 w-auto" />
           <p className="max-w-xs text-ink-soft">Pizzas artisanales, burgers généreux et wings croustillantes. Préparés avec soin et livrés chauds à toute heure.</p>
         </div>
         <div>
