@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
-import { IDS, METHOD_ID, checkout, newKey, resetDb, sql } from "./helpers";
+import { IDS, METHOD_ID, checkout, resetDb, sql } from "./helpers";
 import { acceptFee, createOrder, getOrderByToken, setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
 import { applyWebhookEvent, startPayment } from "@/server/payments";
 import { simulationProvider, signSimulationPayload, SIMULATION_SIGNATURE_HEADER } from "@/server/payments/simulation";
