@@ -4,9 +4,9 @@ import Image from "next/image";
 import { useState } from "react";
 import { Check, Minus, Plus } from "lucide-react";
 import { useCart } from "./CartProvider";
-import { LogoSymbol } from "./Logo";
+import { LogoMark } from "./Logo";
 import { formatMoney } from "@/lib/money";
-import { defaultImageSrc, defaultImageSrcSet, ILLUSTRATION_LABEL } from "@/lib/productImage";
+import { defaultImage as defaultImageOf, hasDefaultImage, ILLUSTRATION_LABEL } from "@/lib/productImage";
 import { SIZE_HINT } from "@/lib/labels";
 import { MAX_LINE_QUANTITY, SIZES, type Currency, type Size } from "@/lib/constants";
 import { minPriceMinor, unitLabel, variantOptionLabel, variantRequired } from "@/lib/productSale";
@@ -28,12 +28,13 @@ export function ProductImage({ url, defaultImage, name, className = "", sizes = 
       </div>
     );
   }
-  if (defaultImage) {
+  if (hasDefaultImage(defaultImage)) {
+    const d = defaultImageOf(defaultImage);
     return (
       <div className={`relative overflow-hidden bg-cream-2 ${className}`}>
-        {/* WebP 480/800/1200 en 4:3 ; dimensions réservées pour éviter tout décalage de mise en page. */}
+        {/* WebP en 4:3 ; dimensions réservées pour éviter tout décalage de mise en page. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={defaultImageSrc(defaultImage, 800)} srcSet={defaultImageSrcSet(defaultImage)} sizes={sizes} width={1200} height={900}
+        <img src={d.src} srcSet={d.srcSet} sizes={sizes} width={d.width} height={d.height}
           alt={`${name} — ${ILLUSTRATION_LABEL.toLowerCase()}`} loading={priority ? "eager" : "lazy"} fetchPriority={priority ? "high" : undefined} decoding="async"
           className="absolute inset-0 h-full w-full object-cover" />
         {showBadge && <span className="absolute bottom-2 left-2 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium leading-tight text-white">{ILLUSTRATION_LABEL}</span>}
@@ -42,7 +43,7 @@ export function ProductImage({ url, defaultImage, name, className = "", sizes = 
   }
   return (
     <div className={`grid place-items-center bg-cream-2 ${className}`} role="img" aria-label={`Photo de ${name} bientôt disponible`}>
-      <LogoSymbol className="h-1/2 max-h-12 w-auto opacity-25" />
+      <LogoMark size="lg" className="opacity-40" />
     </div>
   );
 }
@@ -66,7 +67,7 @@ function PizzaCard({ p, extras, currency, orderable }: { p: CatalogProduct; extr
 
   return (
     <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
-      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="aspect-[4/3] w-full" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <h3 className="text-xl font-extrabold">{p.name}</h3>
@@ -137,7 +138,7 @@ const cap = (t: string | null) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : 
 function SoonCard({ p }: { p: CatalogProduct }) {
   return (
     <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
-      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="aspect-[4/3] w-full" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <h3 className="text-xl font-extrabold">{p.name}</h3>
@@ -172,7 +173,7 @@ function OtherCard({ p, currency, orderable }: { p: CatalogProduct; currency: Cu
 
   return (
     <article id={`p-${p.id}`} className="card fade-up flex flex-col overflow-hidden">
-      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
+      <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="aspect-[4/3] w-full" sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 380px" />
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
           <h3 className="text-xl font-extrabold">{p.name}</h3>

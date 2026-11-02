@@ -9,6 +9,7 @@ import { RowMenu } from "./RowMenu";
 import { SizesPanel } from "./SizesPanel";
 import { formatMoney } from "@/lib/money";
 import { SIZES, type Currency } from "@/lib/constants";
+import { hasDefaultImage } from "@/lib/productImage";
 import { isPriced, isProductConfigured, type AdminProduct, type AdminSize } from "@/server/menu";
 import { unitLabel } from "@/lib/productSale";
 
@@ -66,7 +67,7 @@ function Name({ p }: { p: AdminProduct }) {
       <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="h-[42px] w-14 shrink-0 rounded-lg" sizes="56px" showBadge={false} />
       <div className="min-w-0">
         <p className="font-extrabold leading-tight">{p.name}</p>
-        <p className="text-xs text-ink-soft">{p.category_name ?? "Sans catégorie"}{!p.visible ? " · masqué" : ""}{!p.image_url && p.default_image ? " · illustration par défaut" : ""}{p.is_demo ? " · démo" : ""}{p.archived ? " · archivé" : ""}</p>
+        <p className="text-xs text-ink-soft">{p.category_name ?? "Sans catégorie"}{!p.visible ? " · masqué" : ""}{!p.image_url && hasDefaultImage(p.default_image) ? " · illustration par défaut" : ""}{p.is_demo ? " · démo" : ""}{p.archived ? " · archivé" : ""}</p>
       </div>
     </div>
   );

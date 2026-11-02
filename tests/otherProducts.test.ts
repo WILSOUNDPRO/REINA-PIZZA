@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { defaultImage } from "@/lib/productImage";
 import { beforeEach, describe, expect, it } from "vitest";
 import { IDS, checkout, resetDb, sql } from "./helpers";
 import { createOrder, getOrderByToken } from "@/server/orders";
@@ -37,17 +38,18 @@ describe("migration Burger et Wings", () => {
     expect(await sql`select name, base_price_minor, available from products where id = ${burger}`).toMatchObject([{ name: "Cheeseburger", base_price_minor: 100000, available: true }]);
   });
 
-  it("les images par défaut existent (PNG d'origine + WebP 480/800/1200) et sont en 4:3", async () => {
+  it("les images par défaut (nouveau site) existent, sont en WebP 4:3 et leurs originaux sont conservés", async () => {
     const sharp = (await import("sharp")).default;
-    for (const slug of ["burger", "burger-frites", "wings"]) {
-      expect(fs.existsSync(`public/images/products/${slug}.png`)).toBe(true);
-      for (const f of [`${slug}-480.webp`, `${slug}-800.webp`, `${slug}.webp`]) {
-        const m = await sharp(`public/images/products/${f}`).metadata();
-        expect(m.format, f).toBe("webp");
-        expect(Math.abs(m.width! / m.height! - 4 / 3), f).toBeLessThan(0.01);
+    for (const slug of ["burger-frites", "wings", "pepperoni"]) {
+      const d = defaultImage(slug);
+      for (const part of d.srcSet.split(", ")) {
+        const m = await sharp(`public${part.split(" ")[0]}`).metadata();
+        expect(m.format, part).toBe("webp");
+        expect(Math.abs(m.width! / m.height! - 4 / 3), part).toBeLessThan(0.01);
       }
-      expect((await sharp(`public/images/products/${slug}.webp`).metadata()).width).toBe(1200);
+      expect((await sharp(`public${d.src.replace(/-\d+\.webp$/, ".webp")}`).metadata()).width).toBe(d.width);
     }
+    for (const f of ["burger.jpg", "fries.jpg", "wings.jpg", "moncash.jpg"]) expect(fs.existsSync(`design-originals/${f}`), f).toBe(true);
   });
 });
 

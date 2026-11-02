@@ -1,5 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
+import { defaultImage, hasDefaultImage } from "@/lib/productImage";
 import { IDS, METHOD_ID, checkout, resetDb, sql } from "./helpers";
 import { acceptFee, createOrder, getOrderByToken, setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
 import { applyWebhookEvent, startPayment } from "@/server/payments";
@@ -446,11 +447,16 @@ describe("visuels par défaut", () => {
     expect(rows.map((r) => [r.name, r.default_image])).toEqual([["Pizza pepperoni", "pepperoni"], ["Pizza jambon", "perso"], ["Pizza hareng saur", "hareng-saur"]]);
     expect(rows.every((r) => r.description === "")).toBe(true); // aucune description inventée
   });
-  it("les fichiers par défaut existent (original PNG + WebP 480/800/1200) pour chaque produit", () => {
-    for (const slug of ["pepperoni", "jambon", "hareng-saur"]) {
-      expect(fs.existsSync(`public/images/pizzas/${slug}.png`), slug + ".png").toBe(true);
-      for (const w of [480, 800, 1200]) expect(fs.existsSync(`public/images/pizzas/${slug}-${w}.webp`), `${slug}-${w}.webp`).toBe(true);
+  it("les visuels par défaut viennent du nouveau site : fichiers présents pour pepperoni, burger + frites et wings ; aucun ancien visuel ; rien d'emprunté pour jambon et hareng saur", () => {
+    for (const slug of ["pepperoni", "burger-frites", "wings"]) {
+      expect(hasDefaultImage(slug), slug).toBe(true);
+      const d = defaultImage(slug);
+      expect(fs.existsSync(`public${d.src}`), d.src).toBe(true);
+      for (const part of d.srcSet.split(", ")) expect(fs.existsSync(`public${part.split(" ")[0]}`), part).toBe(true);
     }
+    for (const slug of ["jambon", "hareng-saur", "burger", null]) expect(hasDefaultImage(slug), String(slug)).toBe(false);
+    expect(fs.existsSync("public/images/pizzas")).toBe(false);
+    expect(fs.existsSync("public/brand")).toBe(false);
   });
   it("le panier chiffré côté serveur expose l'illustration, et l'image de l'admin prime", async () => {
     await sql`update products set default_image = 'pepperoni' where id = ${IDS.pizzaA}`;
