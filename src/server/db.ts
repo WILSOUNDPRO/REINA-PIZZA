@@ -5,7 +5,6 @@ export type Sql = postgres.Sql;
 export type Tx = postgres.TransactionSql;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __reinaSql: Sql | undefined;
 }
 

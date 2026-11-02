@@ -2,8 +2,6 @@
 export type SaleUnit = "unit" | "portion";
 export type ProductState = "orderable" | "soon" | "unavailable";
 
-export const SALE_UNIT_LABELS: Record<SaleUnit, string> = { unit: "À l'unité", portion: "Par portion" };
-
 /** Libellé de l'unité configurée : « à l'unité », « portion », « portion de 6 pièces » (seulement si le nombre est renseigné). */
 export function unitLabel(unit: SaleUnit | null, pieces: number | null): string | null {
   if (unit === "unit") return "à l'unité";

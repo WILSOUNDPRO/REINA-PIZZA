@@ -6,7 +6,7 @@ import { getSql } from "@/server/db";
 import { requireAdmin, passwordLogin, setSessionCookies, clearSession } from "@/server/admin/auth";
 import { uploadMenuImage } from "@/server/admin/storage";
 import { setDeliveryFee, setManualPaymentStatus, setOrderStatus } from "@/server/orders";
-import { deleteProduct, saveProduct } from "@/server/menu";
+import { saveProduct } from "@/server/menu";
 import { deleteMethod, saveMethod } from "@/server/paymentMethods";
 import { allow, clientKey } from "@/server/ratelimit";
 import { bool, int, money, str } from "@/server/admin/money-input";
@@ -142,13 +142,6 @@ export async function saveProductAction(formData: FormData) {
   });
   if (!r.ok) back(path, r.message, false);
   back(`/admin/menu/${r.data!.id}`, "Produit enregistré.");
-}
-
-export async function deleteProductAction(formData: FormData) {
-  await requireAdmin();
-  const id = str(formData, "id");
-  const r = isUuid(id) ? await deleteProduct(getSql(), id) : { ok: false as const, message: "Requête invalide." };
-  back("/admin/menu", r.ok ? "Produit supprimé. Les anciennes commandes ne changent pas." : r.message, r.ok);
 }
 
 export async function deleteDemoDataAction() {
