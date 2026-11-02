@@ -12,6 +12,7 @@
     "test:e2e": "node tests/e2e/flow.e2e.cjs",
     "db:migrate": "tsx scripts/migrate.ts",
     "images:optimize": "tsx scripts/optimize-images.ts",
+    "logo:build": "tsx scripts/build-logo.ts",
     "db:bundle": "tsx scripts/bundle-sql.ts",
     "mock:supabase": "tsx scripts/mock-supabase.ts"
   },

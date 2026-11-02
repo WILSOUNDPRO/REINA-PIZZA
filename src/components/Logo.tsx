@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 // Identité visuelle du nouveau site : toque dorée dans un cartouche + « Reina Pizza » et la signature « Pizza • Burger • Wings ».
 // Entièrement vectoriel (aucune image) ; tone="or" sur le fond noir du site public, tone="rouge" pour l'administration (fond clair).
 const TONES = {
@@ -29,4 +31,9 @@ export function Logo({ size = "md", tone = "or", tagline = true, className = "" 
       </span>
     </span>
   );
+}
+
+/** Logo officiel (fond transparent, dessiné pour fond sombre) : en-tête et pied de page du site public. Source : design-originals/logo-reina-pizza.webp. */
+export function LogoImage({ className = "h-12 w-auto", priority = false, large = false }: { className?: string; priority?: boolean; large?: boolean }) {
+  return <Image src={large ? "/brand/logo-reina-pizza-600.webp" : "/brand/logo-reina-pizza-300.webp"} alt="Reina Pizza" width={large ? 600 : 300} height={large ? 321 : 161} priority={priority} className={className} />;
 }

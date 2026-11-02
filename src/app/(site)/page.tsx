@@ -30,7 +30,7 @@ export default async function Home() {
 
   return (
     <>
-      <section className="mx-auto flex min-h-[calc(100dvh-4.5rem)] max-w-6xl flex-col justify-center px-4 pb-16 pt-10" aria-labelledby="titre">
+      <section className="mx-auto flex min-h-[calc(100dvh-5rem)] max-w-6xl flex-col justify-center px-4 pb-16 pt-10" aria-labelledby="titre">
         <div className="fade-up max-w-[36rem]">
           <p className="glass on-canvas mb-5 inline-flex items-center gap-2 rounded-full !bg-white/10 px-3.5 py-1.5 text-xs font-extrabold uppercase tracking-[0.15em]"><span className="fire-dot h-2 w-2 rounded-full bg-tomato" aria-hidden="true" />Fraîche • Artisanale • Livrée 24h/24</p>
           <h1 id="titre" className="on-canvas text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">Pizza, Burger<br /><span className="script text-[1.25em] leading-none text-tomato">&amp; Wings</span><HandHeart className="ml-2 inline-block -translate-y-3 text-tomato" /></h1>
