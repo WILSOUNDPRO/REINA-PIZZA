@@ -1,5 +1,6 @@
 "use client";
 
+import { PaymentMethodBadge } from "./PaymentMethodBadge";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -207,6 +208,7 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
               {paymentMethods.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
             </select>
           </Field>
+          {method && <PaymentMethodBadge label={method.label} />}
           {method?.instructions && <p className="rounded-xl border border-line p-3 text-sm"><strong>{method.label} : </strong>{method.instructions}</p>}
           <Field id="f-paymentMethodNote" label="Précisez le moyen dont vous disposez" optional error={errors.paymentMethodNote} hint="Ex. : espèces à la livraison, ou le service mobile que vous utilisez.">
             <input id="f-paymentMethodNote" name="paymentMethodNote" maxLength={200} className="field" />
@@ -224,7 +226,7 @@ export function CheckoutForm({ zones, currency, emailEnabled, paymentMethods }: 
         <h2 className="text-xl font-extrabold">Récapitulatif</h2>
         <ul className="space-y-1 text-sm">
           {data?.lines.map((l) => (
-            <li key={l.key} className="flex justify-between gap-2"><span>{l.quantity} × {l.productName} ({lineOption({ size: l.size, option_label: l.optionLabel })})</span><span className="font-semibold">{formatMoney(l.lineTotalMinor, currency)}</span></li>
+            <li key={l.key} className="flex justify-between gap-2"><span>{l.quantity} × {l.productName}{lineOption({ size: l.size, option_label: l.optionLabel }) && ` (${lineOption({ size: l.size, option_label: l.optionLabel })})`}</span><span className="font-semibold">{formatMoney(l.lineTotalMinor, currency)}</span></li>
           ))}
         </ul>
         <div className="space-y-1 border-t border-line pt-3">

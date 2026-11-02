@@ -420,3 +420,11 @@ insert into product_variants (product_id, label, price_minor, position, availabl
 select w.id, v.label, v.price_minor, v.position, true, v.pieces
 from w cross join (values ('6 pièces', 60000, 0, 6), ('12 pièces', 120000, 1, 12)) as v(label, price_minor, position, pieces)
 on conflict (product_id, label) do nothing;
+
+-- ═════════ 20260108000000_payment_cash_on_delivery.sql ═════════
+-- Moyen de paiement souhaité « Espèces à la livraison » (en plus de MonCash et de « À convenir avec la pizzeria »).
+-- Il ne s'agit que d'un souhait : aucun paiement n'est effectué sur le site et une commande n'est jamais marquée payée à cause de ce choix.
+-- Idempotent : ne crée pas de doublon et ne réactive pas un moyen que l'administrateur aurait désactivé.
+insert into payment_methods (label, enabled, position)
+select 'Espèces à la livraison', true, 2
+where not exists (select 1 from payment_methods where lower(label) in ('espèces à la livraison', 'especes a la livraison'));

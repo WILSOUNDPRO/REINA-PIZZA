@@ -79,3 +79,61 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; }
 
 @keyframes sheet-up { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 .sheet-up { animation: sheet-up .2s ease both; }
+
+/* ==========================================================================
+   Identité noir et or du site public (accueil, menu, panier, commande, confirmation).
+   Les jetons de couleur sont redéfinis dans cette portée : l'administration garde sa palette claire.
+   ========================================================================== */
+body:has(.theme-noir) { background: #080808; }
+.theme-noir {
+  --color-cream: #0b0908;
+  --color-cream-2: #1b1514;
+  --color-paper: rgb(23 19 19 / .9);
+  --color-tomato: #f5b51b;
+  --color-tomato-dark: #dfa51a;
+  --color-basil: #25d366;
+  --color-basil-dark: #1fb558;
+  --color-ink: #ffffff;
+  --color-ink-soft: #d4d4d8;
+  --color-line: rgb(223 165 26 / .32);
+  --font-display: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  position: relative;
+  min-height: 100dvh;
+  color: #fff;
+  font-family: var(--font-sans);
+}
+.theme-noir h1, .theme-noir h2, .theme-noir h3 { letter-spacing: -0.02em; }
+.theme-noir :focus-visible { outline-color: #f5b51b; }
+.theme-noir .script { font-family: "Caveat Variable", cursive; font-weight: 600; letter-spacing: 0; }
+.theme-noir .text-gold-grad { background: linear-gradient(135deg, #ffd45e, #f5b51b 55%, #e99a00); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.theme-noir .btn-primary { color: #141008; background: linear-gradient(135deg, #ffcb47, #f5b51b 60%, #e99a00); box-shadow: 0 8px 25px rgb(245 181 27 / .3); }
+.theme-noir .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #ffd45e, #f5b51b); box-shadow: 0 10px 30px rgb(245 181 27 / .45); }
+.theme-noir .btn-primary:disabled { background: rgb(255 255 255 / .08); color: #d4d4d8; box-shadow: none; border: 1px solid rgb(223 165 26 / .35); opacity: 1; }
+.theme-noir .btn-ghost { background: rgb(255 255 255 / .06); color: #fff; border-color: rgb(223 165 26 / .45); }
+.theme-noir .btn-ghost:hover:not(:disabled) { background: rgb(245 181 27 / .14); border-color: #f5b51b; }
+.theme-noir .btn-basil { color: #04200e; font-weight: 800; }
+.theme-noir .field { background: rgb(8 8 8 / .72); color: #fff; border-color: rgb(223 165 26 / .4); }
+.theme-noir .field::placeholder { color: #8f8f98; }
+.theme-noir .field:hover { border-color: rgb(245 181 27 / .75); }
+.theme-noir .field:focus { border-color: #f5b51b; box-shadow: 0 0 0 3px rgb(245 181 27 / .28); }
+.theme-noir select.field option { background: #171313; color: #fff; }
+.theme-noir .stepper-btn { background: rgb(255 255 255 / .06); border-color: rgb(223 165 26 / .45); color: #fff; }
+.theme-noir .stepper-btn:hover { border-color: #f5b51b; background: rgb(245 181 27 / .14); }
+.theme-noir .card { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgb(0 0 0 / .5); }
+.theme-noir .bg-white { background-color: var(--color-paper); }
+.theme-noir .hover\:bg-white:hover { background-color: rgb(245 181 27 / .14); }
+.theme-noir .bg-tomato { color: #141008; }
+.theme-noir [class*="border-[#cfc8bd]"] { border-color: rgb(223 165 26 / .4); }
+.theme-noir [class*="bg-[#e3f2ea]"] { background-color: rgb(37 211 102 / .16); }
+
+@media print {
+  body:has(.theme-noir) { background: #fff; }
+  .theme-noir {
+    --color-cream: #fff; --color-cream-2: #f2ede5; --color-paper: #fff; --color-tomato: #921f24; --color-tomato-dark: #741a1e;
+    --color-basil: #1f7a4c; --color-ink: #202020; --color-ink-soft: #5c5853; --color-line: #999;
+    color: #202020;
+  }
+  .theme-noir .card { backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+  .theme-noir .bg-tomato { color: #fff; }
+}
