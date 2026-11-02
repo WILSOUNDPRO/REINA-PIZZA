@@ -1,7 +1,8 @@
 "use client";
 
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
 import { useState } from "react";
-import { Check, Copy, MessageCircle, Phone, Printer } from "lucide-react";
+import { Check, Copy, Phone, Printer } from "lucide-react";
 
 // Le bouton ouvre un BROUILLON WhatsApp : le client doit l'envoyer lui-même. Rien n'est envoyé automatiquement.
 export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: string; message: string; phoneHref: string }) {
@@ -19,7 +20,7 @@ export function OrderMessageActions({ waUrl, message, phoneHref }: { waUrl: stri
   }
   return (
     <div className="no-print space-y-3">
-      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer"><MessageCircle size={20} aria-hidden="true" />Confirmer sur WhatsApp</a>
+      <a className="btn btn-basil btn-lg" href={waUrl} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={20} aria-hidden="true" />Confirmer sur WhatsApp</a>
       <p className="text-center text-xs text-ink-soft">Le message WhatsApp contiendra votre commande et vos coordonnées de livraison pour Reina Pizza.</p>
       <div className="grid grid-cols-2 gap-2">
         <button type="button" className="btn btn-ghost" onClick={copy}>{state === "ok" ? <><Check size={18} aria-hidden="true" />Message copié</> : <><Copy size={18} aria-hidden="true" />Copier le message</>}</button>

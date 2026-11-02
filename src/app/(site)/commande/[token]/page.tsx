@@ -1,6 +1,7 @@
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Check, CreditCard, Home, Info, Landmark, MapPin, MessageCircle, Navigation, Phone, StickyNote, User, XCircle } from "lucide-react";
+import { Check, CreditCard, Home, Info, Landmark, MapPin, Navigation, Phone, StickyNote, User, XCircle } from "lucide-react";
 import { getSql } from "@/server/db";
 import { getOrderByToken } from "@/server/orders";
 import { getSettings } from "@/server/settings";
@@ -22,7 +23,7 @@ export const metadata: Metadata = { title: "Ma commande", robots: { index: false
 
 const SUBTITLE = { to_confirm: "En attente de confirmation", confirmed: "Confirmée par la pizzeria", preparing: "En préparation", out_for_delivery: "En livraison", delivered: "Livrée", cancelled: "Annulée" } as const;
 
-function Row({ Icon, children, label }: { Icon: typeof User; children: React.ReactNode; label: string }) {
+function Row({ Icon, children, label }: { Icon: React.ComponentType<{ size?: number; className?: string }>; children: React.ReactNode; label: string }) {
   return (
     <li className="flex gap-3">
       <Icon size={18} className="mt-0.5 shrink-0 text-tomato" aria-hidden="true" />
@@ -103,7 +104,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
         <ul className="space-y-2.5 text-sm">
           <Row Icon={User} label="Nom"><strong>{o.customer_name}</strong></Row>
           <Row Icon={Phone} label="Téléphone">{formatPhoneDisplay(o.customer_phone)}</Row>
-          {o.customer_whatsapp && o.customer_whatsapp !== o.customer_phone && <Row Icon={MessageCircle} label="WhatsApp">{formatPhoneDisplay(o.customer_whatsapp)}</Row>}
+          {o.customer_whatsapp && o.customer_whatsapp !== o.customer_phone && <Row Icon={WhatsAppIcon} label="WhatsApp">{formatPhoneDisplay(o.customer_whatsapp)}</Row>}
           <Row Icon={MapPin} label="Commune et quartier">{o.commune}, {o.quarter}</Row>
           <Row Icon={Home} label="Adresse">{o.address}</Row>
           <Row Icon={Landmark} label="Point de repère">{o.landmark}</Row>

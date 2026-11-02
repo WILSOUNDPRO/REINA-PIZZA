@@ -1,11 +1,12 @@
-import { ChefHat, ChevronRight, Clock, MapPin, MessageCircle, Phone, Truck } from "lucide-react";
+import { WhatsAppIcon } from "@/components/WhatsAppIcon";
+import { ChefHat, ChevronRight, Clock, MapPin, Phone, Truck } from "lucide-react";
 import Link from "next/link";
 import { Logo } from "./Logo";
 import { waLink } from "@/lib/whatsapp";
 import { normalizePhone } from "@/lib/phone";
 import type { Settings } from "@/server/settings";
 
-const RIBBON = [[ChefHat, "Préparation fraîche"], [Clock, "Ouvert 24h/24, 7j/7"], [Truck, "Livraison à domicile"], [MessageCircle, "Commande WhatsApp"]] as const;
+const RIBBON = [[ChefHat, "Préparation fraîche"], [Clock, "Ouvert 24h/24, 7j/7"], [Truck, "Livraison à domicile"], [WhatsAppIcon, "Commande WhatsApp"]] as const;
 const LINKS = [["/", "Accueil"], ["/menu", "Menu"], ["/#apropos", "À propos"], ["/#contact", "Contact"]] as const;
 
 export function SiteFooter({ s }: { s: Settings }) {
@@ -36,7 +37,7 @@ export function SiteFooter({ s }: { s: Settings }) {
           <p className="font-bold">Contact</p>
           <p className="flex items-start gap-2 pt-1 text-ink-soft"><MapPin size={18} className="mt-0.5 shrink-0" aria-hidden="true" />{s.address}, Haïti</p>
           <p><a className="inline-flex min-h-11 items-center gap-2 underline" href={`tel:${tel}`}><Phone size={18} aria-hidden="true" />{s.phone}</a></p>
-          <p><a className="inline-flex min-h-11 items-center gap-2 font-semibold text-basil underline" href={waLink(s.whatsapp_number)} target="_blank" rel="noopener noreferrer"><MessageCircle size={18} aria-hidden="true" />WhatsApp</a></p>
+          <p><a className="inline-flex min-h-11 items-center gap-2 font-semibold text-basil underline" href={waLink(s.whatsapp_number)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} aria-hidden="true" />WhatsApp</a></p>
         </div>
       </div>
       <div className="border-t border-line px-4 py-4 text-center">
