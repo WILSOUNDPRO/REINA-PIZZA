@@ -30,6 +30,7 @@ async function addPizza(page, name = "Pizza pepperoni", qty = 1) {
 async function submitOrder(page) {
   await page.getByRole("button", { name: "Enregistrer ma commande" }).dblclick({ noWaitAfter: true });
   await page.waitForURL(/\/commande\/[\w-]{43}$/);
+  await page.getByRole("heading", { name: "Commande enregistrée" }).waitFor({ timeout: 20000 }); // la page de chargement s'affiche d'abord
   await page.waitForLoadState("networkidle");
 }
 async function adminAction(ap, buttonName, urlPart, exact = false) {
@@ -308,7 +309,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await addPizza(page, "Pizza pepperoni", 1);
   await page.goto(BASE + "/commander"); await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor();
   await page.selectOption("#f-paymentMethodId", { label: "MonCash" });
-  check("formulaire : instructions de MonCash affichées au choix, sans le numéro de réception", (await page.getByText("Instruction test e2e").isVisible()) && !(await page.locator("main").innerText()).includes("3800-1234"));
+  check("formulaire : instructions de MonCash affichées au choix, sans le numéro de réception", (await page.getByText("Instruction test e2e").waitFor({ timeout: 8000 }).then(() => true, () => false)) && !(await page.locator("main").innerText()).includes("3800-1234"));
   await page.screenshot({ path: `${SHOTS}/checkout-moncash.png`, fullPage: true, caret: "initial" });
   await page.evaluate(() => localStorage.setItem("reina-cart-v1", "[]"));
   // confirmation : instructions visibles seulement après confirmation de la commande
@@ -526,6 +527,11 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
     const txt = norm(await card.innerText());
     check(`catalogue : ${name} « Bientôt disponible », bouton désactivé, aucun prix ni portion inventé, « Photo d'illustration »`, txt.includes("Bientôt disponible") && (await card.getByRole("button", { name: "Bientôt disponible" }).isDisabled()) && !/\d\s?HTG|\d+ pièces|portion|taille/i.test(txt.replace("Photo d'illustration", "")) && txt.includes("Photo d'illustration"), txt);
   }
+  await page.goto(BASE + "/menu?categorie=burgers"); await page.waitForLoadState("networkidle");
+  { const before = page.url(); await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle"); const t0 = Date.now();
+    await page.locator("nav[aria-label='Catégories'] a", { hasText: "Wings" }).click();
+    check("filtre par catégorie : instantané, sans rechargement ni requête serveur, adresse mise à jour", (await page.locator("article").count()) === 1 && Date.now() - t0 < 1500 && page.url().endsWith("/menu?categorie=wings") && before.length > 0);
+    await page.locator("nav[aria-label='Catégories'] a", { hasText: "Tout" }).click(); }
   await page.goto(BASE + "/menu?categorie=burgers"); await page.waitForLoadState("networkidle");
   check("catalogue : filtre « Burgers » (une seule catégorie affichée)", (await page.locator("article").count()) === 1 && (await page.locator("nav[aria-label='Catégories'] a[aria-current=page]").innerText()) === "Burgers");
   // contrôle serveur : commande forcée d'un produit non configuré
