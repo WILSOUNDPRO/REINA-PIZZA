@@ -13,7 +13,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   if (await getAdmin()) redirect("/admin");
   return (
     <main className="mx-auto grid min-h-dvh max-w-sm content-center gap-5 px-4">
-      <div className="space-y-3"><Logo className="h-14 w-auto" priority /><h1 className="text-2xl font-extrabold">Administration</h1></div>
+      <div className="space-y-3"><Logo size="lg" tone="rouge" /><h1 className="text-2xl font-extrabold">Administration</h1></div>
       {!authConfigured() && <p role="alert" className="rounded-xl bg-tomato p-3 text-sm font-bold text-white">Supabase Auth n'est pas configuré (SUPABASE_URL, SUPABASE_ANON_KEY). Connexion impossible.</p>}
       {sp.err && <p role="alert" className="rounded-xl bg-tomato p-3 font-bold text-white">{sp.err}</p>}
       <form action={loginAction} className="card space-y-4 p-5">

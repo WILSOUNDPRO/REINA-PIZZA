@@ -1,3 +1,4 @@
+import { hasDefaultImage } from "@/lib/productImage";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSql } from "@/server/db";
@@ -109,7 +110,7 @@ export default async function ProductForm({ params, searchParams }: { params: Pr
 
         <div className="space-y-2">
           <p className="text-sm font-bold">Photo</p>
-          {p?.default_image && <p className="text-xs text-ink-soft">{p.image_url ? "Votre photo remplace l'illustration par défaut. Retirez-la pour revenir à l'illustration." : "Une photo d'illustration est affichée par défaut. Ajoutez votre photo pour la remplacer."}</p>}
+          {hasDefaultImage(p?.default_image) && <p className="text-xs text-ink-soft">{p.image_url ? "Votre photo remplace l'illustration par défaut. Retirez-la pour revenir à l'illustration." : "Une photo d'illustration est affichée par défaut. Ajoutez votre photo pour la remplacer."}</p>}
           {p?.image_url && (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}

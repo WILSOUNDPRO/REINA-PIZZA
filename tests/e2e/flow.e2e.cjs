@@ -86,15 +86,17 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("menu : plus aucune donnée de démonstration", !/démo/i.test(menu));
   const pep = page.locator("article", { hasText: "Pizza pepperoni" });
   check("menu : tailles M à XXL désactivées « Prix à venir »", (await pep.locator("[aria-disabled=true]").count()) === 4 && (await pep.getByRole("radio").count()) === 1);
-  for (const [name, slug] of [["Pizza pepperoni", "pepperoni"], ["Pizza jambon", "jambon"], ["Pizza hareng saur", "hareng-saur"]]) {
-    const card = page.locator("article", { hasText: name });
+  { const card = page.locator("article", { hasText: "Pizza pepperoni" });
     await card.scrollIntoViewIfNeeded();
     await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
     const info = await card.locator("img").first().evaluate((i) => ({ src: i.currentSrc, set: i.srcset, w: i.getAttribute("width"), h: i.getAttribute("height"), nat: [i.naturalWidth, i.naturalHeight], box: i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height, fit: getComputedStyle(i).objectFit, alt: i.alt }));
-    check(`menu : ${name} → ${slug}-*.webp, srcset 480/800/1200, 4:3, object-cover, dimensions réservées`, info.src.includes(`/images/pizzas/${slug}-`) && info.src.endsWith(".webp") && /480w.*800w.*1200w/.test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === "1200" && info.h === "900" && info.nat[0] > 0 && info.alt.includes(name), JSON.stringify(info));
-    check(`menu : ${name} affiche discrètement « Photo d'illustration »`, (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1);
+    check("menu : Pizza pepperoni → image du nouveau site /images/products/pepperoni*.webp, srcset 480/800/960, 4:3, dimensions réservées", info.src.includes("/images/products/pepperoni") && info.src.endsWith(".webp") && /480w.*800w.*960w/.test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === "960" && info.h === "720" && info.nat[0] > 0 && info.alt.includes("Pizza pepperoni"), JSON.stringify(info));
+    check("menu : Pizza pepperoni affiche discrètement « Photo d'illustration »", (await card.getByText("Photo d'illustration", { exact: true }).count()) === 1); }
+  for (const name of ["Pizza jambon", "Pizza hareng saur"]) {
+    const card = page.locator("article", { hasText: name });
+    check(`menu : ${name} — pas d'image fournie : emplacement discret, aucune image d'un autre produit, pas de mention « illustration »`, (await card.locator("img").count()) === 0 && (await card.locator("div[role=img]").count()) === 1 && (await card.getByText("Photo d'illustration", { exact: true }).count()) === 0);
   }
-  check("menu : plus aucun bloc « photo à venir »", (await page.locator("article div[role=img]").count()) === 0);
+  check("menu : aucune ancienne image (ni /images/pizzas, ni /brand) chargée", (await page.locator("img[src*='/images/pizzas'], img[src*='/brand']").count()) === 0 && (await fetch(BASE + "/images/pizzas/pepperoni-480.webp")).status === 404 && (await fetch(BASE + "/brand/logo.png")).status === 404);
   check("menu : pas de défilement horizontal", await noScroll(page));
 
   // 2. Panier
@@ -105,7 +107,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/panier"); await page.getByText("Sous-total des produits").first().waitFor();
   check("panier : 2 × 1 500 HTG = 3 000 HTG", norm(await page.locator("main").innerText()).includes("3 000 HTG"));
   await page.screenshot({ path: `${SHOTS}/03-cart.png`, fullPage: true, caret: "initial" });
-  check("panier : miniature = illustration du pepperoni", (await page.locator("article img").first().getAttribute("src")).includes("/images/pizzas/pepperoni-"));
+  check("panier : miniature = image du pepperoni (nouveau site)", (await page.locator("article img").first().getAttribute("src")).includes("/images/products/pepperoni"));
 
   // 3. Formulaire sans zone tarifée : frais à confirmer, sous-total non présenté comme total
   await page.getByRole("link", { name: "Renseigner ma livraison" }).click();
@@ -438,7 +440,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const dp = await dctx.newPage();
   await dp.goto(BASE + "/"); await dp.waitForLoadState("networkidle");
-  check("accueil desktop : vitrine du menu avec illustrations (pepperoni 480/800 px) et mention « Photo d'illustration »", (await dp.locator("#pizzas img[alt^='Pizza pepperoni']").first().evaluate((i) => i.currentSrc.includes("pepperoni-480") || i.currentSrc.includes("pepperoni-800"))) && (await dp.getByText("Photo d'illustration", { exact: true }).count()) >= 3);
+  check("accueil desktop : vitrine du menu avec illustrations (pepperoni 480/800 px) et mention « Photo d'illustration »", (await dp.locator("#pizzas img[alt^='Pizza pepperoni']").first().evaluate((i) => i.currentSrc.includes("pepperoni-480") || i.currentSrc.includes("pepperoni-800"))) && (await dp.getByText("Photo d'illustration", { exact: true }).count()) >= 1);
   await dctx.close();
   await ap.goto(`${BASE}/admin/menu`);
   ap.once("dialog", (d) => d.accept());
@@ -464,7 +466,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   }
   const pr = await ctx.newPage();
   await pr.goto(orderUrl); await pr.emulateMedia({ media: "print" });
-  check("impression : logo visible, boutons masqués, mention « pas un reçu de paiement »", ((await pr.locator("img[alt='Reina Pizza']:visible").count()) >= 1) && !(await pr.getByRole("link", { name: "Confirmer sur WhatsApp" }).isVisible()) && (await pr.getByText("ce document n'est pas un reçu de paiement").isVisible()));
+  check("impression : logo visible, boutons masqués, mention « pas un reçu de paiement »", ((await pr.getByText("Reina Pizza", { exact: true }).filter({ visible: true }).count()) >= 1) && !(await pr.getByRole("link", { name: "Confirmer sur WhatsApp" }).isVisible()) && (await pr.getByText("ce document n'est pas un reçu de paiement").isVisible()));
   await pr.close();
 
   // 14. Responsive : pas de défilement horizontal de 360 px à 1440 px, captures comparables
@@ -517,7 +519,8 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
     await card.scrollIntoViewIfNeeded();
     await card.locator("img").first().evaluate((i) => i.decode().catch(() => {}));
     const info = await card.locator("img").first().evaluate((i) => ({ src: i.currentSrc, set: i.srcset, w: i.getAttribute("width"), h: i.getAttribute("height"), nat: i.naturalWidth, box: i.parentElement.getBoundingClientRect().width / i.parentElement.getBoundingClientRect().height, fit: getComputedStyle(i).objectFit }));
-    check(`catalogue : ${name} → /images/products/${slug}*.webp, srcset 480/800/1200, 4:3, dimensions réservées`, info.src.includes(`/images/products/${slug}`) && info.src.endsWith(".webp") && /480w.*800w.*1200w/.test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === "1200" && info.h === "900" && info.nat > 0, JSON.stringify(info));
+    const big = slug === "wings" ? ["480", "360", /480w$/] : ["1200", "900", /480w.*800w.*1200w/];
+    check(`catalogue : ${name} → /images/products/${slug}*.webp (nouveau site), 4:3, dimensions réservées`, info.src.includes(`/images/products/${slug}`) && info.src.endsWith(".webp") && big[2].test(info.set) && Math.abs(info.box - 4 / 3) < 0.02 && info.fit === "cover" && info.w === big[0] && info.h === big[1] && info.nat > 0, JSON.stringify(info));
     const txt = norm(await card.innerText());
     check(`catalogue : ${name} « Bientôt disponible », bouton désactivé, aucun prix ni portion inventé, « Photo d'illustration »`, txt.includes("Bientôt disponible") && (await card.getByRole("button", { name: "Bientôt disponible" }).isDisabled()) && !/\d\s?HTG|\d+ pièces|portion|taille/i.test(txt.replace("Photo d'illustration", "")) && txt.includes("Photo d'illustration"), txt);
   }

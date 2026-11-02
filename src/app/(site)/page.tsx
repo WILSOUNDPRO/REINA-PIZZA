@@ -70,7 +70,7 @@ export default async function Home() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {tiles.map(({ p, from, note }) => (
             <Link key={p.id} href={`/menu#p-${p.id}`} className="card group flex flex-col overflow-hidden transition-transform hover:-translate-y-0.5 hover:border-tomato" aria-label={`Choisir ${p.name}`}>
-              <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className={p.image_url || p.default_image ? "aspect-[4/3] w-full" : "h-24 w-full"} sizes="(max-width: 640px) 100vw, 380px" />
+              <ProductImage url={p.image_url} defaultImage={p.default_image} name={p.name} className="aspect-[4/3] w-full" sizes="(max-width: 640px) 100vw, 380px" />
               <div className="flex items-end justify-between gap-3 p-4">
                 <div><h3 className="text-lg font-extrabold">{p.name}</h3>{note && <p className="text-sm text-ink-soft">{note}</p>}<p className="mt-1 text-lg font-extrabold text-tomato">{formatMoney(from!, s.currency)}</p></div>
                 <span className="btn btn-primary !min-h-11 !px-4">Choisir</span>

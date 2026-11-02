@@ -18,13 +18,13 @@ export default async function PanelLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-dvh bg-cream lg:grid lg:grid-cols-[15rem_1fr]">
       <aside className="hidden border-r border-line bg-cream lg:flex lg:flex-col lg:gap-8 lg:p-4">
-        <Link href="/admin" aria-label="Administration Reina Pizza" className="px-2 pt-2"><Logo className="h-14 w-auto" /></Link>
+        <Link href="/admin" aria-label="Administration Reina Pizza" className="px-2 pt-2"><Logo size="md" tone="rouge" /></Link>
         <AdminNav orientation="side" newOrders={n} />
       </aside>
       <div className="min-w-0">
         <header className="sticky top-0 z-30 border-b border-line bg-white">
           <div className="flex items-center gap-3 px-4 py-2">
-            <Link href="/admin" className="lg:hidden" aria-label="Administration Reina Pizza"><Logo className="h-8 w-auto" /></Link>
+            <Link href="/admin" className="lg:hidden" aria-label="Administration Reina Pizza"><Logo size="sm" tone="rouge" tagline={false} /></Link>
             <Breadcrumb />
             <div className="ml-auto min-w-0"><NewOrderWatcher /></div>
             <div className="flex items-center gap-2 border-l border-line pl-3">

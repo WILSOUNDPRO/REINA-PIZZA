@@ -57,7 +57,7 @@ export default async function OrderPage({ params }: { params: Promise<{ token: s
 
   return (
     <div className="mx-auto max-w-xl space-y-4 px-4 pb-4 pt-6">
-      <div className="hidden items-center justify-between print:flex"><Logo className="h-14 w-auto" /><p className="text-right text-sm">Delmas 33, rue Charbonnier, impasse Costo, Haïti<br />{settings.phone}</p></div>
+      <div className="hidden items-center justify-between print:flex"><Logo size="md" tone="rouge" /><p className="text-right text-sm">Delmas 33, rue Charbonnier, impasse Costo, Haïti<br />{settings.phone}</p></div>
 
       <header className="space-y-3 text-center">
         {/* L'icône confirme uniquement l'ENREGISTREMENT de la commande, pas la disponibilité ni le paiement. */}

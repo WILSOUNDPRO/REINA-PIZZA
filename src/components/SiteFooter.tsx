@@ -11,8 +11,7 @@ export function SiteFooter({ s }: { s: Settings }) {
     <footer className="no-print mt-16 border-t border-line bg-cream/90 backdrop-blur-md">
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
         <div className="space-y-3">
-          <Logo tone="or" className="h-12 w-auto" />
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-ink-soft">Pizza • Burger • Wings</p>
+          <Logo size="lg" />
           <p className="flex items-start gap-2 text-ink-soft"><MapPin size={18} className="mt-0.5 shrink-0" aria-hidden="true" />{s.address}, Haïti</p>
           <p className="flex items-center gap-2 text-ink-soft"><Clock size={18} className="shrink-0" aria-hidden="true" />{s.hours_text}</p>
         </div>
