@@ -51,7 +51,7 @@ export function CartView({ currency, canOrder, blockedReason }: { currency: Curr
               {l.extras.length > 0 && <p className="text-xs text-ink-soft">+ {l.extras.map((e) => e.name).join(", ")}</p>}
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2">
                 {(l.size || l.optionLabel) && <label className="flex items-center gap-2 text-sm">
-                  {l.size && <span className="text-ink-soft">Taille</span>}
+                  {l.size && l.availableSizes.length > 1 && <span className="text-ink-soft">Taille</span>}
                   {l.size && l.availableSizes.length > 1 ? (
                     <select className="field !min-h-11 !w-auto !py-1" value={l.size} onChange={(e) => setSize(lineKey({ productId: l.productId, size: l.size ?? undefined, variantId: l.variantId ?? undefined, extraIds: l.extras.map((x) => x.id) }), e.target.value as Size)}>
                       {l.availableSizes.map((s) => <option key={s.size} value={s.size}>{s.size} · {formatMoney(s.priceMinor, currency)}</option>)}

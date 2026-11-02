@@ -60,7 +60,25 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await page.goto(BASE + "/"); await page.waitForLoadState("networkidle"); await page.waitForTimeout(500);
   await page.screenshot({ path: `${SHOTS}/01-home.png`, fullPage: true, caret: "initial" });
   check("accueil : pas de défilement horizontal", await noScroll(page));
-  check("accueil mobile : visuel principal pepperoni visible, produits accessibles sans long défilement", (await page.locator("section img[alt^='Pizza pepperoni']").first().isVisible()) && (await page.getByRole("heading", { name: "Nos pizzas" }).evaluate((h) => h.getBoundingClientRect().top)) < 1200);
+  check("accueil : titre « Pizza, Burger & Wings », menu en vitrine (pizzas, burger, wings) sans long défilement", (await page.getByRole("heading", { level: 1 }).innerText()).replace(/\s+/g, " ") === "Pizza, Burger & Wings" && (await page.getByRole("heading", { name: "Le Menu" }).count()) === 1 && (await page.locator("#pizzas a[aria-label^='Choisir']").count()) >= 3);
+  // Identité noir et or, animation 3D de fond, informations critiques
+  const theme = await page.evaluate(() => ({ body: getComputedStyle(document.body).backgroundColor, canvas: !!document.getElementById("animation-canvas"), pos: getComputedStyle(document.getElementById("animation-canvas")).position, w: document.getElementById("animation-canvas").width, h: document.getElementById("animation-canvas").height, iw: innerWidth, ih: innerHeight, gold: getComputedStyle(document.querySelector(".btn-primary")).backgroundImage }));
+  check("design noir et or : fond noir, bouton doré, canvas #animation-canvas fixe plein écran", theme.body === "rgb(8, 8, 8)" && theme.canvas && theme.pos === "fixed" && theme.w === theme.iw && theme.h === theme.ih && /245, 181, 27/.test(theme.gold), JSON.stringify(theme));
+  await page.waitForFunction(() => Number(document.getElementById("animation-canvas").dataset.loaded ?? 0) >= 10, null, { timeout: 15000 }).catch(() => {});
+  const f0 = Number(await page.evaluate(() => document.getElementById("animation-canvas").dataset.frame));
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await page.waitForTimeout(3500);
+  const f1 = Number(await page.evaluate(() => document.getElementById("animation-canvas").dataset.frame));
+  await page.evaluate(() => window.scrollTo(0, 0)); await page.waitForTimeout(3500);
+  const f2 = Number(await page.evaluate(() => document.getElementById("animation-canvas").dataset.frame));
+  const painted = await page.evaluate(() => { const c = document.getElementById("animation-canvas"); const d = c.getContext("2d").getImageData(c.width / 2, c.height / 2, 1, 1).data; return d[0] + d[1] + d[2] > 30; });
+  check("animation 3D : l'image suit le défilement (début → fin → retour), canvas dessiné, 238 images disponibles", f0 === 1 && f1 > 200 && f2 < 40 && painted && (await fetch(BASE + "/animation/f238.webp")).ok && !(await fetch(BASE + "/animation/f239.webp")).ok, `${f0} ${f1} ${f2} ${painted}`);
+  { const rc = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" }); const rp = await rc.newPage(); await rp.goto(BASE + "/"); await rp.waitForLoadState("networkidle"); await rp.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await rp.waitForTimeout(1500);
+    check("mouvement réduit : image fixe, pas d'animation au défilement", (await rp.evaluate(() => document.getElementById("animation-canvas").dataset.frame)) === "1"); await rc.close(); }
+  const allText = norm(await page.locator("body").innerText());
+  const hrefs = await page.locator("a[href*='wa.me']").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  check("informations critiques : WhatsApp 50946461212, adresse Delmas 33, +509 4646-1212, HTG", hrefs.length >= 2 && hrefs.every((h) => h.startsWith("https://wa.me/50946461212")) && allText.includes("Delmas 33, rue Charbonnier, impasse Costo, Haïti") && allText.includes("+509 4646-1212") && allText.includes("HTG"), hrefs.join(","));
+  check("aucun emoji décoratif dans l'interface publique", !/\p{Extended_Pictographic}/u.test(allText.replace(/[•×—·]/g, "")), (allText.match(/\p{Extended_Pictographic}/gu) ?? []).join(""));
+  check("moyens de paiement : MonCash avec son logo, Espèces à la livraison avec l'icône dorée", (await page.locator("#livraison img[src*='moncash']").count()) === 1 && (await page.locator("#livraison li", { hasText: "Espèces à la livraison" }).locator("svg").count()) === 1 && (await page.locator("#livraison li", { hasText: "MonCash" }).count()) === 1);
   await page.goto(BASE + "/menu"); await page.waitForLoadState("networkidle");
   await page.screenshot({ path: `${SHOTS}/02-menu.png`, fullPage: true, caret: "initial" });
   const menu = norm(await page.locator("main").innerText());
@@ -98,7 +116,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   check("formulaire : sous-total sans ligne « Total »", form.includes("Sous-total des produits") && !/^Total\b/m.test(form));
   check("formulaire : « Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande. »", form.includes("Aucun paiement n'est effectué sur le site. Le paiement sera organisé directement avec Reina Pizza après confirmation de la commande."));
   check("formulaire : aucun champ carte/PIN/mot de passe", (await page.locator("input[type=password], input[autocomplete^=cc-], input[name*=card i], input[name*=pin i]").count()) === 0);
-  check("formulaire : seuls les moyens activés sont proposés — MonCash disponible, ordre respecté", (await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts()).join("|") === "À convenir avec la pizzeria|MonCash");
+  check("formulaire : seuls les moyens activés sont proposés — MonCash et Espèces à la livraison disponibles, ordre respecté", (await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts()).join("|") === "À convenir avec la pizzeria|MonCash|Espèces à la livraison");
   await page.getByRole("button", { name: "Enregistrer ma commande" }).click();
   check("validation : champs obligatoires signalés, dont le moyen de paiement souhaité", (await page.getByText("Le nom complet est obligatoire.").isVisible()) && (await page.getByText("L'adresse précise est obligatoire.").isVisible()) && (await page.getByText("Choisissez le moyen de paiement souhaité.").count()) > 0);
   await page.screenshot({ path: `${SHOTS}/04-checkout-errors.png`, fullPage: true, caret: "initial" });
@@ -311,7 +329,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   await ap.goto(`${BASE}/admin/moyens-paiement`); await ap.waitForLoadState("networkidle");
   await addPizza(page, "Pizza pepperoni", 1);
   await page.goto(BASE + "/commander"); await page.getByRole("button", { name: "Enregistrer ma commande" }).waitFor();
-  check("MonCash désactivé : n'est plus proposé, les autres moyens activés le restent", (await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts()).join("|") === "À convenir avec la pizzeria|Test e2e");
+  { const opts = await page.locator("#f-paymentMethodId option:not([disabled])").allInnerTexts(); check("MonCash désactivé : n'est plus proposé, les autres moyens activés le restent", !opts.includes("MonCash") && opts.includes("À convenir avec la pizzeria") && opts.includes("Espèces à la livraison") && opts.includes("Test e2e"), opts.join("|")); }
   await page.evaluate(() => localStorage.setItem("reina-cart-v1", "[]"));
   check("commande existante : le nom du moyen choisi est conservé après désactivation", psql(`select payment_method from orders where ref = '${ref}'`) === "MonCash");
   await ap.goto(`${BASE}/admin/commandes/${oid}`);
@@ -420,7 +438,7 @@ async function adminAction(ap, buttonName, urlPart, exact = false) {
   const dctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const dp = await dctx.newPage();
   await dp.goto(BASE + "/"); await dp.waitForLoadState("networkidle");
-  check("accueil desktop : visuel principal = pepperoni (1200 px, prioritaire), badge illustration", (await dp.locator("section img[alt^='Pizza pepperoni']").first().evaluate((i) => i.currentSrc.includes("pepperoni-1200") || i.currentSrc.includes("pepperoni-800")) ) && (await dp.locator("section img[alt^='Pizza pepperoni']").first().getAttribute("fetchpriority")) === "high" && (await dp.getByText("Photo d'illustration", { exact: true }).count()) >= 4);
+  check("accueil desktop : vitrine du menu avec illustrations (pepperoni 480/800 px) et mention « Photo d'illustration »", (await dp.locator("#pizzas img[alt^='Pizza pepperoni']").first().evaluate((i) => i.currentSrc.includes("pepperoni-480") || i.currentSrc.includes("pepperoni-800"))) && (await dp.getByText("Photo d'illustration", { exact: true }).count()) >= 3);
   await dctx.close();
   await ap.goto(`${BASE}/admin/menu`);
   ap.once("dialog", (d) => d.accept());
